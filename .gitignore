@@ -1,0 +1,9 @@
+build
+/ui
+
+compile_commands.json
+.direnv
+
+*.fit
+*.seq
+
