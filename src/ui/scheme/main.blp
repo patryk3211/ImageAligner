@@ -1,8 +1,6 @@
 using Gtk 4.0;
 using Adw 1;
-
-//template 
-
+// template 
 Adw.ToolbarView root {
   [top]
   Gtk.HeaderBar {
@@ -14,27 +12,35 @@ Adw.ToolbarView root {
     }
   }
 
-  Gtk.Box {
-    Gtk.GLArea {}
+  Gtk.Paned {
+    Gtk.GLArea main_gl_area {}
 
     Gtk.Box {
       orientation: vertical;
+      hexpand: true;
 
       Gtk.StackSwitcher {
         stack: tool_sidebar;
       }
-      Gtk.Stack tool_sidebar {
-        Gtk.StackPage {
-          title: _("Sequence");
-          child: Gtk.Box sequence_box {
-            orientation: vertical;
 
-            Gtk.Label {
-              label: _("Images");
-            }
+      Gtk.ScrolledWindow {
+        Gtk.Stack tool_sidebar {
+          // Sequence page
+          Gtk.StackPage {
+            title: _("Sequence");
 
-            $gtkmm__CustomObject_SequenceView sequence_view { }
-          };
+            child: Gtk.Box sequence_box {
+              orientation: vertical;
+
+              Gtk.Label {
+                label: _("Images");
+              }
+
+              $gtkmm__CustomObject_SequenceView sequence_view {
+                vexpand: true;
+              }
+            };
+          }
         }
       }
     }

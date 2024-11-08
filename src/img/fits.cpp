@@ -52,11 +52,12 @@ Img::Fits::Fits(const std::string& filename)
     printf("END\n\n");  /* terminate listing with END */
 
     fits_movrel_hdu(m_fileptr, 1, NULL, &m_status);  /* try to move to next HDU */
+    break;
   }
 
   if (m_status == END_OF_FILE)  m_status = 0; /* Reset after normal error */
 
-  // if (m_status) fits_report_error(stderr, m_status); /* print any error message */
+  if (m_status) fits_report_error(stderr, m_status); /* print any error message */
 }
 
 Img::Fits::Fits(Fits&& other)
@@ -119,7 +120,7 @@ void Img::Fits::readPixelRect(int type, void *data, long *start, long *end, long
     int count = imageDimensionCount();
     long incDef[count];
     for(int i = 0; i < count; ++i)
-      incDef[i] = 0;
+      incDef[i] = 1;
     fits_read_subset(m_fileptr, type, start, end, incDef, nullptr, data, nullptr, &m_status);
     return;
   }

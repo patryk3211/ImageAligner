@@ -30,6 +30,7 @@
         gtk4 glib pcre2 util-linux libselinux libsepol fribidi libthai libdatrie expat xorg.libXdmcp lerc gtkmm4 blueprint-compiler
         libadwaita appstream
         cfitsio
+        libGL
         # gtk3 cfitsio gsl exiv2 gnuplot opencv fftwFloat librtprocess wcslib
         # libconfig libraw libtiff libpng libjpeg libheif ffms ffmpeg json-glib
         # libjxl libxisf libgit2 curl

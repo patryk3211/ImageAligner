@@ -1,6 +1,7 @@
 #include "ui/window.hpp"
 #include "sigc++/functors/mem_fun.h"
 #include "ui/state.hpp"
+#include "ui/widgets/main_view.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -17,12 +18,16 @@ Window::Window()
   auto btn_open_file = builder->get_widget<Gtk::Button>("btn_open_file");
   btn_open_file->signal_clicked().connect(sigc::mem_fun(*this, &Window::openFileDialog));
 
-  m_sequence_view = Gtk::Builder::get_widget_derived<SequenceView>(builder, "sequence_view");
+  m_sequenceView = Gtk::Builder::get_widget_derived<SequenceView>(builder, "sequence_view");
+  m_mainView = Gtk::Builder::get_widget_derived<MainView>(builder, "main_gl_area");
+  m_mainView->set_size_request(400, 400);
 }
 
 void Window::setState(const std::shared_ptr<UI::State>& state) {
   m_state = state;
-  m_sequence_view->populateModel(*m_state);
+  m_sequenceView->populateModel(*m_state);
+
+  m_mainView->m_image->load_texture(state->m_imageFile, 1);
 }
 
 void Window::openFileDialog() {
