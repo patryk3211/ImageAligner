@@ -9,6 +9,7 @@ enable_testing()
 set(COMMON_SRC
   src/img/sequence.cpp
   src/img/fits.cpp
+  src/img/provider.cpp
 )
 
 set(EXEC_SOURCE

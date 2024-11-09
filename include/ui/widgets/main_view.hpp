@@ -1,8 +1,7 @@
 #pragma once
 
-#include "gdkmm/glcontext.h"
 #include "ui/widgets/gl_area_plus.hpp"
-#include "img/fits.hpp"
+#include "img/provider.hpp"
 #include <gtkmm.h>
 
 namespace UI {
@@ -10,6 +9,7 @@ namespace UI {
 class ViewImage {
   std::shared_ptr<GL::Buffer> m_vertices;
   std::shared_ptr<GL::Texture> m_texture;
+  float m_matrix[9];
 
 public:
   float m_colorMultiplier;
@@ -17,8 +17,8 @@ public:
   ViewImage(GLAreaPlus& area);
   ~ViewImage() = default;
 
-  void make_vertices(float scaleX, float scaleY, float angle);
-  void load_texture(Img::Fits& image, int index);
+  void make_vertices(float scaleX, float scaleY);
+  void load_texture(Img::ImageProvider& image, int index);
 
   void render(GL::Program& program);
 };

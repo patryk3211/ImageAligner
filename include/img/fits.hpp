@@ -1,16 +1,15 @@
 #pragma once
 
-#include <fitsio.h>
+#include "img/provider.hpp"
 
-#include <string>
+#include <filesystem>
+#include <fitsio.h>
 
 namespace Img {
 
-class Fits {
+class Fits : public ImageProvider {
   fitsfile *m_fileptr;
   int m_status;
-
-  int m_hduCount;
 
   class ErrorGuard {
     Fits& m_parent;
@@ -21,15 +20,13 @@ class Fits {
   };
 
 public:
-  Fits(const std::string& filename);
+  Fits(const std::filesystem::path& filename);
   Fits(Fits&& other);
 
   // no copy constructor
   Fits(const Fits& other) = delete;
 
-  ~Fits();
-
-  int hduCount() const;
+  virtual ~Fits();
 
   void select(int index);
 
@@ -37,8 +34,9 @@ public:
   int imageDimensionCount();
   void imageSize(int dimCount, long *dimensions);
 
-  void readPixelRect(int type, void *data, long *start, long length);
-  void readPixelRect(int type, void *data, long *start, long *end, long *inc = 0);
+  virtual DataParameters getImageParameters(int index) override;
+  virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) override;
 };
 
 }
+

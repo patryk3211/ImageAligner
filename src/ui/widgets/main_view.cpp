@@ -1,12 +1,10 @@
 #include "ui/widgets/main_view.hpp"
-#include "ui/widgets/gl_area_plus.hpp"
 
 #include <GL/gl.h>
 #include <GL/glext.h>
 
 #include <fitsio.h>
 #include <iostream>
-#include <memory>
 
 using namespace UI;
 
@@ -15,9 +13,11 @@ static const char *VERTEX_SHADER =
   "in vec2 a_Position;\n"
   "in vec2 a_UV;\n"
   "uniform mat4 u_View;\n"
+  "uniform mat3 u_Transform;\n"
   "out vec2 p_UV;\n"
   "void main() {\n"
-  "  gl_Position = u_View * vec4(a_Position, 0.0, 1.0);\n"
+  "  vec3 imgPos = u_Transform * vec3(a_Position, 1.0);\n"
+  "  gl_Position = u_View * vec4(imgPos.xy, 0.0, 1.0);\n"
   "  p_UV = a_UV;\n"
   "}\n"
 ;
@@ -66,7 +66,7 @@ void MainView::realize() {
   m_program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
 
   m_image = new ViewImage(*this);
-  m_image->make_vertices(0.5, 0.5, 0);
+  m_image->make_vertices(0.5, 0.5);
 }
 
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
@@ -110,6 +110,11 @@ ViewImage::ViewImage(GLAreaPlus& area) {
   m_vertices = area.createBuffer();
   m_texture = area.createTexture();
   m_colorMultiplier = 10;
+
+  memset(m_matrix, 0, sizeof(m_matrix));
+  m_matrix[0] = 1;
+  m_matrix[4] = 1;
+  m_matrix[8] = 1;
 }
 
 // 2 floats for position, 2 for UV
@@ -122,15 +127,15 @@ const float MODEL_TEMPLATE[] = {
    1.0,  1.0,   1.0, 0.0,
 };
 
-void ViewImage::make_vertices(float scaleX, float scaleY, float angle) {
+void ViewImage::make_vertices(float scaleX, float scaleY) {
   float buffer[BUFFER_STRIDE * 4];
 
   for(int i = 0; i < 4; ++i) {
     float x = MODEL_TEMPLATE[i * BUFFER_STRIDE] * scaleX;
     float y = MODEL_TEMPLATE[i * BUFFER_STRIDE + 1] * scaleY;
     // Position
-    buffer[i * BUFFER_STRIDE] = std::cos(angle) * x + std::sin(angle) * y;
-    buffer[i * BUFFER_STRIDE + 1] = std::cos(angle) * y - std::sin(angle) * x;
+    buffer[i * BUFFER_STRIDE] = x;
+    buffer[i * BUFFER_STRIDE + 1] = y;
     // UV
     buffer[i * BUFFER_STRIDE + 2] = MODEL_TEMPLATE[i * BUFFER_STRIDE + 2];
     buffer[i * BUFFER_STRIDE + 3] = MODEL_TEMPLATE[i * BUFFER_STRIDE + 3];
@@ -139,33 +144,25 @@ void ViewImage::make_vertices(float scaleX, float scaleY, float angle) {
   m_vertices->store(sizeof(buffer), buffer);
 }
 
-void ViewImage::load_texture(Img::Fits& image, int index) {
-  image.select(index);
+void ViewImage::load_texture(Img::ImageProvider& image, int index) {
+  auto params = image.getImageParameters(0);
+  // Read only the first layer
+  params.setDimension(2, 1, 1, 1);
 
-  long dims[2];
-  image.imageSize(2, dims);
+  if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
+    std::cerr << "Not a short type 16 bit image" << std::endl;
+    return;
+  }
 
-  long start[3] = { 1, 1, 1 };
-  long end[3] = { dims[0], dims[1], 1 };
-  long inc[3] = { 1, 1, 1 };
+  auto data = image.getPixels(params);
 
-  size_t pixelCount = dims[0] * dims[1] / (inc[0] * inc[1]);
-  uint16_t* data = new uint16_t[pixelCount];
-
-  image.readPixelRect(TUSHORT, data, start, end, inc);
-
-  // uint8_t* processedData = new uint8_t[pixelCount];
-  // for(size_t i = 0; i < pixelCount; ++i) {
-  //   uint8_t value = static_cast<uint8_t>(data[i] / 257);
-  //   processedData[i] = value;
-  // }
-
-  m_texture->load(dims[0], dims[1], GL_RED, GL_UNSIGNED_SHORT, data, GL_R16);
-  make_vertices(1.0, 1.0 * ((float)dims[1] / dims[0]), 0);
+  m_texture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
+  make_vertices(1.0, 1.0 * ((float)params.height() / params.width()));
 }
 
 void ViewImage::render(GL::Program& program) {
   glUniform1f(program.uniformLocation("u_ColorMult"), m_colorMultiplier);
+  glUniformMatrix3fv(program.uniformLocation("u_Transform"), 1, GL_FALSE, m_matrix);
 
   glActiveTexture(GL_TEXTURE0);
   m_texture->bind();

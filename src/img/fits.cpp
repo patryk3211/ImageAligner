@@ -1,36 +1,64 @@
 #include "img/fits.hpp"
+
 #include <cassert>
 #include <iostream>
 
 #define GUARD() ErrorGuard _guard(*this)
 
-Img::Fits::ErrorGuard::ErrorGuard(Fits& parent)
+using namespace Img;
+
+static int fitsDataType(const DataType::EnumType& type) {
+  switch(type) {
+    case DataType::BYTE:
+      return TSBYTE;
+    case DataType::UBYTE:
+      return TBYTE;
+    case DataType::SHORT:
+      return TSHORT;
+    case DataType::USHORT:
+      return TUSHORT;
+    case DataType::INT:
+      return TINT;
+    case DataType::UINT:
+      return TUINT;
+    case DataType::LONG:
+      return TLONG;
+    case DataType::ULONG:
+      return TULONG;
+    case DataType::FLOAT:
+      return TFLOAT;
+    case DataType::DOUBLE:
+      return TDOUBLE;
+  }
+}
+
+Fits::ErrorGuard::ErrorGuard(Fits& parent)
   : m_parent(parent) {
   assert(m_parent.m_status == 0);
   m_parent.m_status = 0;
 }
 
-Img::Fits::ErrorGuard::~ErrorGuard() {
+Fits::ErrorGuard::~ErrorGuard() {
   if(m_parent.m_status) {
     fits_report_error(stderr, m_parent.m_status);
     m_parent.m_status = 0;
   }
 }
 
-Img::Fits::Fits(const std::string& filename)
+Fits::Fits(const std::filesystem::path& filename)
   : m_status(0) {
   GUARD();
 
   fits_open_file(&m_fileptr, filename.c_str(), READONLY, &m_status);
 
-  fits_get_num_hdus(m_fileptr, &m_hduCount, &m_status);
+  fits_get_num_hdus(m_fileptr, &m_imageCount, &m_status);
 
   if(m_status) {
     // An error has occurred
-    m_hduCount = -1;
+    m_imageCount = -1;
     std::cerr << "Failed to open FITS file '" << filename << "'" << std::endl;
   } else {
-    std::cout << "Opened FITS file ('" << filename << "') with " << m_hduCount << " HDUs" << std::endl;
+    std::cout << "Opened FITS file ('" << filename << "') with " << m_imageCount << " HDUs" << std::endl;
   }
 
   int hdupos, nkeys;
@@ -60,14 +88,14 @@ Img::Fits::Fits(const std::string& filename)
   if (m_status) fits_report_error(stderr, m_status); /* print any error message */
 }
 
-Img::Fits::Fits(Fits&& other)
+Fits::Fits(Fits&& other)
   : m_fileptr(other.m_fileptr)
-  , m_status(other.m_status)
-  , m_hduCount(other.m_hduCount) {
+  , m_status(other.m_status) {
+  m_imageCount = other.m_imageCount;
   other.m_fileptr = nullptr;
 }
 
-Img::Fits::~Fits() {
+Fits::~Fits() {
   if(m_fileptr) {
     GUARD();
 
@@ -75,17 +103,13 @@ Img::Fits::~Fits() {
   }
 }
 
-int Img::Fits::hduCount() const {
-  return m_hduCount;
-}
-
-void Img::Fits::select(int index) {
+void Fits::select(int index) {
   GUARD();
 
   fits_movabs_hdu(m_fileptr, index, NULL, &m_status);
 }
 
-int Img::Fits::imageType() {
+int Fits::imageType() {
   GUARD();
 
   int type = 0;
@@ -93,7 +117,7 @@ int Img::Fits::imageType() {
   return type;
 }
 
-int Img::Fits::imageDimensionCount() {
+int Fits::imageDimensionCount() {
   GUARD();
 
   int count = 0;
@@ -101,30 +125,95 @@ int Img::Fits::imageDimensionCount() {
   return count;
 }
 
-void Img::Fits::imageSize(int dimCount, long *dimensions) {
+void Fits::imageSize(int dimCount, long *dimensions) {
   GUARD();
 
   fits_get_img_size(m_fileptr, dimCount, dimensions, &m_status);
 }
 
-void Img::Fits::readPixelRect(int type, void *data, long *start, long length) {
+// void Fits::readPixelRect(int type, void *data, long *start, long length) {
+//   GUARD();
+
+//   fits_read_pix(m_fileptr, type, start, length, nullptr, data, nullptr, &m_status);  
+// }
+
+// void Fits::readPixelRect(int type, void *data, long *start, long *end, long *inc) {
+//   GUARD();
+
+//   if(inc == 0) {
+//     int count = imageDimensionCount();
+//     long incDef[count];
+//     for(int i = 0; i < count; ++i)
+//       incDef[i] = 1;
+//     fits_read_subset(m_fileptr, type, start, end, incDef, nullptr, data, nullptr, &m_status);
+//     return;
+//   }
+
+//   fits_read_subset(m_fileptr, type, start, end, inc, nullptr, data, nullptr, &m_status);
+// }
+
+DataParameters Fits::getImageParameters(int index) {
   GUARD();
+  select(index + 1);
 
-  fits_read_pix(m_fileptr, type, start, length, nullptr, data, nullptr, &m_status);  
-}
+  int dimCount = imageDimensionCount();
+  long dims[dimCount];
+  imageSize(dimCount, dims);
 
-void Img::Fits::readPixelRect(int type, void *data, long *start, long *end, long *inc) {
-  GUARD();
+  int equivType;
+  fits_get_img_equivtype(m_fileptr, &equivType, &m_status);
 
-  if(inc == 0) {
-    int count = imageDimensionCount();
-    long incDef[count];
-    for(int i = 0; i < count; ++i)
-      incDef[i] = 1;
-    fits_read_subset(m_fileptr, type, start, end, incDef, nullptr, data, nullptr, &m_status);
-    return;
+  DataType::EnumType type;
+  switch(equivType) {
+    case BYTE_IMG: type = DataType::UBYTE; break;
+    case SHORT_IMG: type = DataType::SHORT; break;
+    case USHORT_IMG: type = DataType::USHORT; break;
+    case LONG_IMG: type = DataType::INT; break;
+    case LONGLONG_IMG: type = DataType::LONG; break;
+    case FLOAT_IMG: type = DataType::FLOAT; break;
+    case DOUBLE_IMG: type = DataType::DOUBLE; break;
+    default:
+      std::cerr << "Unknown equivType received from FITSIO: " << equivType << std::endl;
+      return DataParameters(index);
   }
 
-  fits_read_subset(m_fileptr, type, start, end, inc, nullptr, data, nullptr, &m_status);
+  if(m_status == 0) {
+    DataParameters params(index, type, dimCount, dims);
+    return params;
+  } else {
+    // Invalid parameters
+    return DataParameters(index);
+  }
+}
+
+std::shared_ptr<uint8_t[]> Fits::getPixels(const DataParameters& params) {
+  if(!params)
+    return nullptr;
+
+  GUARD();
+
+  select(params.index() + 1);
+  int dimCount = imageDimensionCount();
+  if(dimCount != params.dimCount())
+    return nullptr;
+
+  long start[dimCount], end[dimCount], inc[dimCount];
+  size_t pixelCount = 1;
+  for(int i = 0; i < dimCount; ++i) {
+    start[i] = params.start()[i];
+    end[i] = params.end()[i];
+    inc[i] = params.inc()[i];
+
+    size_t length = (end[i] - start[i] + 1) / inc[i];
+    pixelCount *= length;
+  }
+
+  std::shared_ptr<uint8_t[]> data(new uint8_t[pixelCount * DataType::dataSize(params.type())]);
+  fits_read_subset(m_fileptr, fitsDataType(params.type()), start, end, inc, nullptr, data.get(), nullptr, &m_status);
+
+  if(m_status != 0)
+    return nullptr;
+
+  return data;
 }
 
