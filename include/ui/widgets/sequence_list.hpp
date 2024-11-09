@@ -32,7 +32,7 @@ public:
 
   virtual ~SequenceView() = default;
 
-  void populateModel(const UI::State& state);
+  void connectState(const std::shared_ptr<UI::State>& state);
 
   Glib::RefPtr<Gio::ListStore<SequenceListItem>>& model();
 

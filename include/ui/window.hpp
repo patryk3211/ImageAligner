@@ -10,10 +10,11 @@ namespace UI {
 class Window : public Gtk::Window {
   Glib::RefPtr<Gtk::FileDialog> m_dialog;
 
+  std::shared_ptr<UI::State> m_state;
+
+public:
   SequenceView* m_sequenceView;
   MainView* m_mainView;
-
-  std::shared_ptr<UI::State> m_state;
 
 public:
   Window();

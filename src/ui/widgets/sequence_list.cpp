@@ -44,13 +44,13 @@ Glib::RefPtr<Gio::ListStore<SequenceListItem>>& SequenceView::model() {
   return m_model;
 }
 
-void SequenceView::populateModel(const UI::State& state) {
+void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
   // Clear the model
   m_model->remove_all();
 
   // Populate with new sequence
-  for(int i = 0; i < state.m_sequence->imageCount(); ++i) {
-    auto& img = state.m_sequence->image(i);
+  for(int i = 0; i < state->m_sequence->imageCount(); ++i) {
+    auto& img = state->m_sequence->image(i);
     m_model->append(SequenceListItem::create(img.m_fileIndex, img.m_included));
   }
 }

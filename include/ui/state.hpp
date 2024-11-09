@@ -6,6 +6,7 @@
 #include "img/fits.hpp"
 
 namespace UI {
+class Window;
 
 class State {
 

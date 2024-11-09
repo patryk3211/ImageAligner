@@ -131,30 +131,21 @@ void Fits::imageSize(int dimCount, long *dimensions) {
   fits_get_img_size(m_fileptr, dimCount, dimensions, &m_status);
 }
 
-// void Fits::readPixelRect(int type, void *data, long *start, long length) {
-//   GUARD();
-
-//   fits_read_pix(m_fileptr, type, start, length, nullptr, data, nullptr, &m_status);  
-// }
-
-// void Fits::readPixelRect(int type, void *data, long *start, long *end, long *inc) {
-//   GUARD();
-
-//   if(inc == 0) {
-//     int count = imageDimensionCount();
-//     long incDef[count];
-//     for(int i = 0; i < count; ++i)
-//       incDef[i] = 1;
-//     fits_read_subset(m_fileptr, type, start, end, incDef, nullptr, data, nullptr, &m_status);
-//     return;
-//   }
-
-//   fits_read_subset(m_fileptr, type, start, end, inc, nullptr, data, nullptr, &m_status);
-// }
-
 DataParameters Fits::getImageParameters(int index) {
   GUARD();
   select(index + 1);
+  
+  int hdupos, nkeys;
+  char card[FLEN_CARD];
+  fits_get_hdu_num(m_fileptr, &hdupos);
+  fits_get_hdrspace(m_fileptr, &nkeys, NULL, &m_status); /* get # of keywords */
+  printf("Header listing for HDU #%d:\n", hdupos);
+  for (int i = 1; i <= nkeys; i++) { /* Read and print each keywords */
+     if (fits_read_record(m_fileptr, i, card, &m_status))break;
+     printf("%s\n", card);
+  }
+  printf("END\n\n");  /* terminate listing with END */
+
 
   int dimCount = imageDimensionCount();
   long dims[dimCount];
@@ -178,8 +169,7 @@ DataParameters Fits::getImageParameters(int index) {
   }
 
   if(m_status == 0) {
-    DataParameters params(index, type, dimCount, dims);
-    return params;
+    return DataParameters(index, type, dimCount, dims);
   } else {
     // Invalid parameters
     return DataParameters(index);

@@ -25,9 +25,9 @@ Window::Window()
 
 void Window::setState(const std::shared_ptr<UI::State>& state) {
   m_state = state;
-  m_sequenceView->populateModel(*m_state);
 
-  m_mainView->m_image->load_texture(state->m_imageFile, 1);
+  m_sequenceView->connectState(m_state);
+  m_mainView->connectState(m_state);
 }
 
 void Window::openFileDialog() {

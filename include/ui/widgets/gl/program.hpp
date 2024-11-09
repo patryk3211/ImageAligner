@@ -20,6 +20,13 @@ public:
   void use();
 
   uint uniformLocation(const std::string& name);
+
+  void uniform1i(const std::string& name, int value);
+  void uniform1f(const std::string& name, float value);
+
+  void uniformMat3fv(const std::string& name, int count, bool transpose, const float *data);
+  void uniformMat4fv(const std::string& name, int count, bool transpose, const float *data);
+
 };
 
 } // namespace UI::GL

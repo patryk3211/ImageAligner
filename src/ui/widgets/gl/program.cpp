@@ -89,3 +89,19 @@ uint Program::uniformLocation(const std::string& name) {
   return iter->second;
 }
 
+void Program::uniform1i(const std::string& name, int value) {
+  glUniform1i(uniformLocation(name), value);
+}
+
+void Program::uniform1f(const std::string& name, float value) {
+  glUniform1f(uniformLocation(name), value);
+}
+
+void Program::uniformMat3fv(const std::string& name, int count, bool transpose, const float *data) {
+  glUniformMatrix3fv(uniformLocation(name), count, transpose, data);
+}
+
+void Program::uniformMat4fv(const std::string& name, int count, bool transpose, const float *data) {
+  glUniformMatrix4fv(uniformLocation(name), count, transpose, data);
+}
+

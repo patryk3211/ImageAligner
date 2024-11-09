@@ -1,5 +1,4 @@
 #include "ui/state.hpp"
-#include <iostream>
 #include <memory>
 #include <utility>
 
@@ -23,3 +22,4 @@ std::shared_ptr<State> State::fromSequenceFile(const std::filesystem::path& sequ
 
   return std::make_shared<State>(sequence, std::move(fits));
 }
+
