@@ -1,7 +1,6 @@
 #include "ui/widgets/sequence_list.hpp"
+#include "gtkmm/singleselection.h"
 #include "ui/state.hpp"
-
-#include "sigc++/functors/ptr_fun.h"
 
 #include <string>
 
@@ -38,6 +37,8 @@ SequenceView::SequenceView(BaseObjectType *cobject, const Glib::RefPtr<Gtk::Buil
   
   // Set selection model
   set_model(Gtk::SingleSelection::create(m_model));
+
+  m_refImageSelector = builder->get_widget<Gtk::SpinButton>("ref_image_spin_btn");
 }
 
 Glib::RefPtr<Gio::ListStore<SequenceListItem>>& SequenceView::model() {
@@ -53,6 +54,38 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
     auto& img = state->m_sequence->image(i);
     m_model->append(SequenceListItem::create(img.m_fileIndex, img.m_included));
   }
+
+  // Set reference image index
+  auto adj = m_refImageSelector->get_adjustment();
+  adj->set_lower(0);
+  adj->set_step_increment(1);
+  adj->set_upper(state->m_sequence->imageCount() - 1);
+  adj->set_value(state->m_sequence->referenceImage());
+
+  auto listView = get_children()[1];
+  auto rows = listView->get_children();
+  rows[state->m_sequence->referenceImage()]->add_css_class("refimg");
+
+  // Select first image
+  get_model()->select_item(0, true);
+}
+
+void SequenceView::prevImage() {
+  uint selected = getSelected();
+  if(selected > 0) {
+    get_model()->select_item(selected - 1, true);
+  }
+}
+
+void SequenceView::nextImage() {
+  uint selected = getSelected();
+  if(selected < m_model->get_n_items() - 1) {
+    get_model()->select_item(selected + 1, true);
+  }
+}
+
+uint SequenceView::getSelected() {
+  return dynamic_cast<Gtk::SingleSelection&>(*get_model()).get_selected();
 }
 
 void SequenceView::labelColSetup(const ListItem& item) {

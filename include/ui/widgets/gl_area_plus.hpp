@@ -9,9 +9,25 @@
 namespace UI {
 
 class GLAreaPlus : public Gtk::GLArea {
+  // static GLAreaPlus* s_contextHolder;
+
   std::list<std::weak_ptr<GL::Object>> m_objects;
 
-  template<typename T> std::shared_ptr<T> make_pointer(T* ptr) {
+public:
+  GLAreaPlus(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
+  virtual ~GLAreaPlus();
+
+  std::shared_ptr<GL::Texture> createTexture();
+  std::shared_ptr<GL::Buffer> createBuffer();
+  std::shared_ptr<GL::Program> createProgram(const char *vert, const char *frag);
+
+protected:
+  Glib::RefPtr<Gdk::GLContext> createContext();
+  virtual void realize();
+  virtual bool render(const Glib::RefPtr<Gdk::GLContext>& context) = 0;
+  virtual void unrealize();
+
+  template<typename T> std::shared_ptr<T> wrap(T* ptr) {
     std::shared_ptr<T> newPtr(ptr, [this](T* toDelete) {
       // Destructor manages the gl context
       delete toDelete;
@@ -29,19 +45,6 @@ class GLAreaPlus : public Gtk::GLArea {
     m_objects.push_back(newPtr);
     return newPtr;
   }
-
-public:
-  GLAreaPlus(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
-  virtual ~GLAreaPlus() = default;
-
-  std::shared_ptr<GL::Texture> createTexture();
-  std::shared_ptr<GL::Buffer> createBuffer();
-  std::shared_ptr<GL::Program> createProgram(const char *vert, const char *frag);
-
-protected:
-  virtual void realize();
-  virtual bool render(const Glib::RefPtr<Gdk::GLContext>& context) = 0;
-  virtual void unrealize();
 };
 
 } // namespace UI

@@ -1,7 +1,8 @@
 #include "img/fits.hpp"
 
 #include <cassert>
-#include <iostream>
+
+#include <spdlog/spdlog.h>
 
 #define GUARD() ErrorGuard _guard(*this)
 
@@ -56,36 +57,36 @@ Fits::Fits(const std::filesystem::path& filename)
   if(m_status) {
     // An error has occurred
     m_imageCount = -1;
-    std::cerr << "Failed to open FITS file '" << filename << "'" << std::endl;
+    spdlog::error("Failed to open FITS file {}", filename.c_str());
   } else {
-    std::cout << "Opened FITS file ('" << filename << "') with " << m_imageCount << " HDUs" << std::endl;
+    spdlog::info("Opened FITS file {} with {} HDUs", filename.c_str(), m_imageCount);
   }
 
-  int hdupos, nkeys;
-  char card[FLEN_CARD];
-  fits_get_hdu_num(m_fileptr, &hdupos);
+  // int hdupos, nkeys;
+  // char card[FLEN_CARD];
+  // fits_get_hdu_num(m_fileptr, &hdupos);
 
-  for (; !m_status; hdupos++)  /* Main loop through each extension */
-  {
-    fits_get_hdrspace(m_fileptr, &nkeys, NULL, &m_status); /* get # of keywords */
+  // for (; !m_status; hdupos++)  /* Main loop through each extension */
+  // {
+  //   fits_get_hdrspace(m_fileptr, &nkeys, NULL, &m_status); /* get # of keywords */
 
-    printf("Header listing for HDU #%d:\n", hdupos);
+  //   printf("Header listing for HDU #%d:\n", hdupos);
 
-    for (int i = 1; i <= nkeys; i++) { /* Read and print each keywords */
+  //   for (int i = 1; i <= nkeys; i++) { /* Read and print each keywords */
 
-       if (fits_read_record(m_fileptr, i, card, &m_status))break;
-      // fits_get
-       printf("%s\n", card);
-    }
-    printf("END\n\n");  /* terminate listing with END */
+  //      if (fits_read_record(m_fileptr, i, card, &m_status))break;
+  //     // fits_get
+  //      printf("%s\n", card);
+  //   }
+  //   printf("END\n\n");  /* terminate listing with END */
 
-    fits_movrel_hdu(m_fileptr, 1, NULL, &m_status);  /* try to move to next HDU */
-    break;
-  }
+  //   fits_movrel_hdu(m_fileptr, 1, NULL, &m_status);  /* try to move to next HDU */
+  //   break;
+  // }
 
-  if (m_status == END_OF_FILE)  m_status = 0; /* Reset after normal error */
+  // if (m_status == END_OF_FILE)  m_status = 0; /* Reset after normal error */
 
-  if (m_status) fits_report_error(stderr, m_status); /* print any error message */
+  // if (m_status) fits_report_error(stderr, m_status); /* print any error message */
 }
 
 Fits::Fits(Fits&& other)
@@ -135,16 +136,16 @@ DataParameters Fits::getImageParameters(int index) {
   GUARD();
   select(index + 1);
   
-  int hdupos, nkeys;
-  char card[FLEN_CARD];
-  fits_get_hdu_num(m_fileptr, &hdupos);
-  fits_get_hdrspace(m_fileptr, &nkeys, NULL, &m_status); /* get # of keywords */
-  printf("Header listing for HDU #%d:\n", hdupos);
-  for (int i = 1; i <= nkeys; i++) { /* Read and print each keywords */
-     if (fits_read_record(m_fileptr, i, card, &m_status))break;
-     printf("%s\n", card);
-  }
-  printf("END\n\n");  /* terminate listing with END */
+  // int hdupos, nkeys;
+  // char card[FLEN_CARD];
+  // fits_get_hdu_num(m_fileptr, &hdupos);
+  // fits_get_hdrspace(m_fileptr, &nkeys, NULL, &m_status); /* get # of keywords */
+  // printf("Header listing for HDU #%d:\n", hdupos);
+  // for (int i = 1; i <= nkeys; i++) { /* Read and print each keywords */
+  //    if (fits_read_record(m_fileptr, i, card, &m_status))break;
+  //    printf("%s\n", card);
+  // }
+  // printf("END\n\n");  /* terminate listing with END */
 
 
   int dimCount = imageDimensionCount();
@@ -164,8 +165,9 @@ DataParameters Fits::getImageParameters(int index) {
     case FLOAT_IMG: type = DataType::FLOAT; break;
     case DOUBLE_IMG: type = DataType::DOUBLE; break;
     default:
-      std::cerr << "Unknown equivType received from FITSIO: " << equivType << std::endl;
-      return DataParameters(index);
+      spdlog::error("Unknown equivType received from FITSIO: {}", equivType);
+      assert(false);
+      // return DataParameters(index);
   }
 
   if(m_status == 0) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gtkmm/spinbutton.h"
 #include <gtkmm.h>
 
 namespace UI {
@@ -26,6 +27,8 @@ class SequenceView : public Gtk::ColumnView {
   Factory m_idColFactory;
   Factory m_selectColFactory;
 
+  Gtk::SpinButton *m_refImageSelector;
+
 public:
   SequenceView();
   SequenceView(BaseObjectType *cobject, const Glib::RefPtr<Gtk::Builder>& builder);
@@ -35,6 +38,10 @@ public:
   void connectState(const std::shared_ptr<UI::State>& state);
 
   Glib::RefPtr<Gio::ListStore<SequenceListItem>>& model();
+
+  uint getSelected();
+  void prevImage();
+  void nextImage();
 
 private:
   static void labelColSetup(const ListItem& item);

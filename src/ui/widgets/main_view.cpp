@@ -1,52 +1,18 @@
 #include "ui/widgets/main_view.hpp"
-#include "sigc++/functors/mem_fun.h"
 #include "ui/state.hpp"
 
 #include <GL/gl.h>
 #include <GL/glext.h>
 
 #include <fitsio.h>
-#include <iostream>
+#include <spdlog/spdlog.h>
 
 using namespace UI;
-
-static const char *VERTEX_SHADER = 
-  "#version 150 core\n"
-  "in vec2 a_Position;\n"
-  "in vec2 a_UV;\n"
-  "uniform mat4 u_View;\n"
-  "uniform mat3 u_Transform;\n"
-  "out vec2 p_UV;\n"
-  "void main() {\n"
-  "  vec3 imgPos = u_Transform * vec3(a_Position, 1.0);\n"
-  "  gl_Position = u_View * vec4(imgPos.xy, 0.0, 1.0);\n"
-  "  p_UV = a_UV;\n"
-  "}\n"
-;
-
-static const char *FRAGMENT_SHADER =
-  "#version 150 core\n"
-  "in vec2 p_UV;\n"
-  "out vec4 o_FragColor;\n"
-  "uniform sampler2D u_Texture;\n"
-  "uniform float u_ColorMult;\n"
-  "uniform int u_Highlight;\n"
-  "void main() {\n"
-  "  vec4 texCol = texture(u_Texture, p_UV) * u_ColorMult;\n"
-  "  vec2 centerCoords = p_UV * 2.0 - 1.0;\n"
-  "  float centDist = max(abs(centerCoords.x), abs(centerCoords.y));\n"
-  "  if(u_Highlight > 0 && centDist > 0.95) {\n"
-  "    o_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
-  "  } else {\n"
-  "    o_FragColor = vec4(texCol.xxx, 1.0);\n"
-  "  }\n"
-  "}\n"
-;
 
 MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder)
   : ObjectBase("MainView")
   , GLAreaPlus(cobject, builder) {
-  std::cout << "Initializing Main View GL Area" << std::endl;
+  spdlog::info("Initializing Main View GL Area");
 
   m_sequenceView = Gtk::Builder::get_widget_derived<SequenceView>(builder, "sequence_view");
   auto selectionModel = m_sequenceView->get_model();
@@ -55,6 +21,7 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
   auto dragGesture = Gtk::GestureDrag::create();
   dragGesture->signal_drag_begin().connect(sigc::mem_fun(*this, &MainView::dragBegin));
   dragGesture->signal_drag_update().connect(sigc::mem_fun(*this, &MainView::dragUpdate));
+  dragGesture->signal_drag_end().connect(sigc::mem_fun(*this, &MainView::dragEnd));
   add_controller(dragGesture);
 
   auto scrollController = Gtk::EventControllerScroll::create();
@@ -65,6 +32,9 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
   m_offset[0] = 0;
   m_offset[1] = 0;
   m_scale = 1;
+
+  memset(m_selection, 0, sizeof(m_selection));
+  m_makeSelection = false;
 }
 
 void MainView::connectState(const std::shared_ptr<UI::State>& state) {
@@ -74,7 +44,7 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   // Reset viewport position
   m_offset[0] = 0;
   m_offset[1] = 0;
-  m_scale = 1;
+  m_scale = get_width();
 
   int x = 0, y = 0;
   for(int i = 0; i < m_state->m_sequence->imageCount(); ++i) {
@@ -82,8 +52,8 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
     auto imageView = std::make_shared<ViewImage>(*this);
     imageView->m_sequenceImageIndex = i;
     imageView->load_texture(m_state->m_imageFile, imgSeq.m_fileIndex);
-    imageView->m_matrix[6] = x * 2;
-    imageView->m_matrix[7] = -y * 2;
+    imageView->m_matrix[6] = x;
+    imageView->m_matrix[7] = y;
     if(++x > 5) {
       x = 0;
       ++y;
@@ -94,20 +64,14 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   queue_draw();
 }
 
+void MainView::requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect) {
+  memset(m_selection, 0, sizeof(m_selection));
+  m_selectCallback = callback;
+  m_makeSelection = true;
+}
+
 void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
-  auto selectionModel = m_sequenceView->get_model();
-  auto& model = dynamic_cast<Gio::ListModel&>(*selectionModel);
-
-  int selectedIndex = -1;
-  for(uint i = position; i < model.get_n_items(); ++i) {
-    if(selectionModel->is_selected(i)) {
-      selectedIndex = i;
-      break;
-    }
-  }
-
-  if(selectedIndex == -1)
-    return;
+  uint selectedIndex = m_sequenceView->getSelected();
 
   // Extract selected image object
   auto iter = m_images.begin();
@@ -119,7 +83,7 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
 
   // Image not found
   if(iter == m_images.end()) {
-    std::cout << "Selected image not found in view images" << std::endl;
+    spdlog::warn("Selected image not found in view images");
     return;
   }
 
@@ -132,82 +96,125 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   queue_draw();
 }
 
-static void GLAPIENTRY messageCallback(GLenum source,
-    GLenum type,
-    GLuint id,
-    GLenum severity,
-    GLsizei length,
-    const GLchar* message,
-    const void* userParam) {
-  fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-           ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-            type, severity, message );
-}
-
 void MainView::realize() {
   GLAreaPlus::realize();
-  get_context()->make_current();
 
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(messageCallback, 0);
+  m_imgProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/main/vert.glsl", "ui/gl/main/frag.glsl"));
+  m_selectProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/selector/vert.glsl", "ui/gl/selector/frag.glsl"));
+}
 
-  m_program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+void MainView::enableVertexAttribs() { 
+  glEnableVertexAttribArray(0);
+  glEnableVertexAttribArray(1);
+
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) 0);
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (sizeof(float) * 2));
+}
+
+void MainView::disableVertexAttribs() {
+  glDisableVertexAttribArray(1);
+  glDisableVertexAttribArray(0);
 }
 
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
- 
-  // Prepare vertex buffer format
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) 0);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (sizeof(float) * 2));
-  glEnableVertexAttribArray(0);
-  glEnableVertexAttribArray(1);
 
-  m_program->use();
+  // Prepare vertex buffer format
+  enableVertexAttribs();
+
+  m_imgProgram->use();
 
   float aspect = (float)get_width() / get_height();
+  float scaleFactor = m_scale / get_width();
+
+  // const float projectionMatrix[] = {
+  //   (float)1.0 / get_width(), 0, 0, 0,
+  //   0, -(float)1.0 / get_height(), 0, 0,
+  //   0, 0, 0, 0,
+  //   0, 0, 0, 1
+  // };
+  // const float viewMatrix[] = {
+  //   m_scale, 0, 0, 0,
+  //   0, m_scale, 0, 0,
+  //   0, 0, 1, 0,
+  //   -m_offset[0] * m_scale, -m_offset[1] * m_scale, 0, 1
+  // };
   const float viewMatrix[] = {
-    m_scale, 0.0, 0.0, 0.0,
-    0.0, m_scale * aspect, 0.0, 0.0,
+    scaleFactor, 0.0, 0.0, 0.0,
+    0.0, -scaleFactor * aspect, 0.0, 0.0,
     0.0, 0.0, 1.0, 0.0,
-    m_offset[0] * m_scale, m_offset[1] * m_scale, 0.0, 1.0,
+    m_offset[0] * m_scale, -m_offset[1] * m_scale, 0.0, 1.0,
   };
-  m_program->uniformMat4fv("u_View", 1, false, viewMatrix);
-  m_program->uniform1i("u_Texture", 0);
+  // m_imgProgram->uniformMat4fv("u_Proj", 1, false, projectionMatrix);
+  m_imgProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
+  m_imgProgram->uniform1i("u_Texture", 0);
 
   for(auto iter = m_images.rbegin(); iter != m_images.rend(); ++iter) {
     auto image = *iter;
     if(image == m_images.front()) {
-      m_program->uniform1i("u_Highlight", 1);
+      m_imgProgram->uniform1i("u_Highlight", 1);
     } else {
-      m_program->uniform1i("u_Highlight", 0);
+      m_imgProgram->uniform1i("u_Highlight", 0);
     }
-    image->render(*m_program);
+    image->render(*m_imgProgram);
   }
 
   // Post-render
-  glDisableVertexAttribArray(1);
-  glDisableVertexAttribArray(0);
+  disableVertexAttribs();
+
+  // Render selection
+  m_selectProgram->use();
+  m_selectProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
+  m_selectProgram->uniform4f("u_Selection", m_selection);
+  m_selectProgram->uniform1f("u_Scale", m_scale / get_width());
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   // Print all errors that occurred
   GLenum errCode;
   while((errCode = glGetError()) != GL_NO_ERROR) {
-    std::cout << "GL Error " << errCode << std::endl;
+    spdlog::error("GL Error {}", errCode);
   }
 
   return true;
 }
 
 void MainView::dragBegin(double startX, double startY) {
-  m_savedOffset[0] = m_offset[0];
-  m_savedOffset[1] = m_offset[1];
+  if(!m_makeSelection) {
+    m_savedOffset[0] = m_offset[0];
+    m_savedOffset[1] = m_offset[1];
+  } else {
+    // These translations are absolutely insane
+    m_selection[0] = (startX - (float)get_width() / 2) * 2 / m_scale - m_offset[0] * get_width();
+    m_selection[1] = (startY - (float)get_height() / 2) * 2 / m_scale - m_offset[1] * get_height();
+  }
 }
 
 void MainView::dragUpdate(double offsetX, double offsetY) {
-  m_offset[0] = m_savedOffset[0] + offsetX / get_width() * 2 / m_scale;
-  m_offset[1] = m_savedOffset[1] - offsetY / get_height() * 2 / m_scale;
+  if(!m_makeSelection) {
+    m_offset[0] = m_savedOffset[0] + offsetX / get_width() * 2 / m_scale;
+    m_offset[1] = m_savedOffset[1] + offsetY / get_height() * 2 / m_scale;
+  } else {
+    m_selection[2] = offsetX * 2 / m_scale;
+    m_selection[3] = offsetY * 2 / m_scale;
+  }
   queue_draw();
+}
+
+void MainView::dragEnd(double endX, double endY) {
+  if(m_selection[2] < 0) {
+    m_selection[0] += m_selection[2];
+    m_selection[2] = -m_selection[2];
+  }
+  if(m_selection[3] < 0) {
+    m_selection[1] += m_selection[3];
+    m_selection[3] = -m_selection[3];
+  }
+  if(m_selectCallback) {
+    (*m_selectCallback)(m_selection[0], m_selection[1], m_selection[2], m_selection[3]);
+    m_selectCallback = std::nullopt;
+  }
+  m_makeSelection = false;
 }
 
 bool MainView::scroll(double x, double y) {
@@ -235,11 +242,18 @@ ViewImage::ViewImage(GLAreaPlus& area) {
 // 2 floats for position, 2 for UV
 #define BUFFER_STRIDE (2 + 2)
 
+// const float MODEL_TEMPLATE[] = {
+//   -1.0, -1.0,   0.0, 1.0,
+//   -1.0,  1.0,   0.0, 0.0,
+//    1.0, -1.0,   1.0, 1.0,
+//    1.0,  1.0,   1.0, 0.0,
+// };
+
 const float MODEL_TEMPLATE[] = {
-  -1.0, -1.0,   0.0, 1.0,
-  -1.0,  1.0,   0.0, 0.0,
-   1.0, -1.0,   1.0, 1.0,
-   1.0,  1.0,   1.0, 0.0,
+  0.0, 0.0,   0.0, 0.0,
+  0.0, 1.0,   0.0, 1.0,
+  1.0, 0.0,   1.0, 0.0,
+  1.0, 1.0,   1.0, 1.0,
 };
 
 void ViewImage::make_vertices(float scaleX, float scaleY) {
@@ -271,7 +285,7 @@ void ViewImage::load_texture(Img::ImageProvider& image, int index) {
   params.setDimension(1, -1, -1, scale);
 
   if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
-    std::cerr << "Not a short type 16 bit image" << std::endl;
+    spdlog::error("Not a short type 16 bit image");
     return;
   }
 

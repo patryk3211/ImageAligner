@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
   auto display = Gdk::Display::get_default();
   auto cssProvider = Gtk::CssProvider::create();
   cssProvider->load_from_path("ui/main.scss");
-  Gtk::StyleProvider::add_provider_for_display(display, cssProvider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  Gtk::StyleProvider::add_provider_for_display(display, cssProvider, GTK_STYLE_PROVIDER_PRIORITY_USER);
 
   return app->make_window_and_run<UI::Window>(argc, argv);
 }

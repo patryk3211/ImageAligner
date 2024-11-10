@@ -14,12 +14,16 @@ set(COMMON_SRC
 
 set(EXEC_SOURCE
   src/main.cpp
+
   src/ui/window.cpp
   src/ui/state.cpp
+
   src/ui/widgets/util.cpp
   src/ui/widgets/sequence_list.cpp
   src/ui/widgets/gl_area_plus.cpp
   src/ui/widgets/main_view.cpp
+  src/ui/widgets/alignment_view.cpp
+
   src/ui/widgets/gl/object.cpp
   src/ui/widgets/gl/texture.cpp
   src/ui/widgets/gl/buffer.cpp
@@ -35,12 +39,13 @@ pkg_check_modules(GTKMM gtkmm-4.0)
 pkg_check_modules(Adwaita libadwaita-1)
 
 find_package(OpenGL REQUIRED)
+find_package(spdlog REQUIRED)
 
 # Common library (used for testing functionality)
 add_library(common ${COMMON_SRC})
 
 target_include_directories(common PUBLIC include)
-target_link_libraries(common PUBLIC cfitsio)
+target_link_libraries(common PUBLIC cfitsio spdlog::spdlog)
 
 # Executable target
 add_executable(aligner ${EXEC_SOURCE})
@@ -70,8 +75,8 @@ function(compile_blueprint target input)
 
   add_custom_target(
     ${input}.ui
-    blueprint-compiler compile ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/scheme/${input} --output ${CMAKE_CURRENT_BINARY_DIR}/ui/${input}.ui
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/scheme/${input}
+    blueprint-compiler compile ${CMAKE_CURRENT_SOURCE_DIR}/resource/scheme/${input} --output ${CMAKE_CURRENT_BINARY_DIR}/ui/${input}.ui
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/resource/scheme/${input}
     COMMENT "Compiling ${input}"
   )
 
@@ -80,7 +85,8 @@ endfunction(compile_blueprint)
 
 compile_blueprint(aligner main.blp)
 
-file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/scheme/main.scss ${CMAKE_CURRENT_BINARY_DIR}/ui/main.scss)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/resource/css/main.scss ${CMAKE_CURRENT_BINARY_DIR}/ui/main.scss)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/resource/gl ${CMAKE_CURRENT_BINARY_DIR}/ui/gl SYMBOLIC)
 
 add_subdirectory(test)
 

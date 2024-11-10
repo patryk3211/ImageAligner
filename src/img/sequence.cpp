@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 
+#include <spdlog/spdlog.h>
+
 Img::Sequence::Sequence() {
   m_initialized = false;
 
@@ -11,11 +13,11 @@ Img::Sequence::Sequence() {
 
 // Siril sequence reader based on https://gitlab.com/free-astro/siril/-/blob/master/src/io/seqfile.c
 std::shared_ptr<Img::Sequence> Img::Sequence::readSequence(const std::filesystem::path& filepath) {
-  std::cout << "Reading sequence file " << filepath << std::endl;
+  spdlog::info("Reading sequence file '{}'", filepath.c_str());
 
   std::ifstream file(filepath);
   if(!file.is_open()) {
-    std::cout << "Failed to open file " << filepath << std::endl;
+    spdlog::error("Failed to open file '{}'", filepath.c_str());
     return nullptr;
   }
 
@@ -35,7 +37,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
         continue;
       case 'S': {
         if(line[2] == '"') {
-          std::cout << "Sequence doesn't have a name and will not be loaded!" << std::endl;
+          spdlog::error("Sequence doesn't have a name and will not be loaded!");
           return nullptr;
         }
         if(line[2] == '\'')
@@ -44,7 +46,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
           scanfmt = "%511s %d %d %d %d %d %d %d %d";
 
         if(sequence.m_initialized) {
-          std::cout << "Sequence contains multiple header definitions!" << std::endl;
+          spdlog::error("Sequence contains multiple header definitions!");
           return nullptr;
         }
 
@@ -55,7 +57,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
                   &sequence.m_selectedCount, &sequence.m_fixedLength,
                   &sequence.m_referenceImage, &sequence.m_version,
                   &sequence.m_variableSize, &sequence.m_flag) < 6) {
-          std::cout << "Sequence header error" << std::endl;
+          spdlog::error("Sequence header error");
           return nullptr;
         }
 
@@ -64,7 +66,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
         sequence.m_initialized = true;
 
         if(sequence.m_version <= 3) {
-          std::cout << "Sequence versions below or equal to 3 are unsupported!" << std::endl;
+          spdlog::error("Sequence versions below or equal to 3 are unsupported!");
           return nullptr;
         }
         break;
@@ -72,7 +74,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
       case 'L':
         if(line[1] == ' ') {
           if(sscanf(line + 2, "%d", &sequence.m_layerCount) != 1) {
-            std::cout << "Sequence file format error" << std::endl;
+            spdlog::error("Sequence file format error");
             return nullptr;
           }
         }
@@ -97,7 +99,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
                            &imgRef.m_width, &imgRef.m_height);
         if((tokenCount != 4 && sequence.m_variableSize) ||
             (tokenCount != 2 && !sequence.m_variableSize)) {
-          std::cout << "Sequence file format error" << std::endl;
+          spdlog::error("Sequence file format error");
           return nullptr;
         }
 				// }
@@ -105,7 +107,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
       }
       case 'T':
         if(line[1] != 'F') {
-          std::cout << "Sequence type not supported! (only FITS sequences are currently supported)" << std::endl;
+          spdlog::error("Sequence type not supported! (only FITS sequences are currently supported)");
           return nullptr;
         }
         sequence.m_imageFormat = 'F';
@@ -118,16 +120,16 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
         } else if(line[1] == '*') {
           // CFA channel
         } else {
-          std::cout << "Invalid M line layer index!" << std::endl;
+          spdlog::error("Invalid M line layer index!");
           return nullptr;
         }
         if(line[2] != '-') {
-          std::cout << "Invalid M line layer index!" << std::endl;
+          spdlog::error("Invalid M line layer index!");
           return nullptr;
         }
         int image, consumed;
         if(sscanf(line + 3, "%d%n", &image, &consumed) != 1) {
-          std::cout << "Invalid or missing M line image index!" << std::endl;
+          spdlog::error("Invalid or missing M line image index!");
           return nullptr;
         }
         SequenceImage& ref = sequence.m_images[image];
@@ -143,7 +145,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
                                 &stats.m_min, &stats.m_max,
                                 &stats.m_normValue, &stats.m_bgNoise);
         if(tokenCount != 14) {
-          std::cout << "Malformed M line, file loading terminated." << std::endl;
+          spdlog::error("Malformed M line, file loading terminated.");
           return nullptr;
         }
         break;
@@ -156,7 +158,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
         // Ignore empty line
         break;
       default:
-        std::cout << "Warning! Unsupported line '" << line[0] << "' in sequence!" << std::endl;
+        spdlog::warn("Unsupported line '{}' in sequence!", line[0]);
         break;
     }
   }

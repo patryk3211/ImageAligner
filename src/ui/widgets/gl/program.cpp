@@ -4,6 +4,9 @@
 #include <GL/glext.h>
 
 #include <iostream>
+#include <fstream>
+
+#include <spdlog/spdlog.h>
 
 using namespace UI::GL;
 
@@ -17,7 +20,7 @@ static uint shader(uint type, const char* source) {
   glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
   if(!status) {
     glGetShaderInfoLog(shader, 512, 0, message);
-    std::cerr << "Shader compilation failed! Message: " << message << std::endl;
+    spdlog::error("Shader compilation failed! Message: {}", message);
     glDeleteShader(shader);
     return -1;
   }
@@ -49,7 +52,7 @@ Program::Program(const Glib::RefPtr<Gdk::GLContext>& ctx, const char* vertSource
   glGetProgramiv(program, GL_LINK_STATUS, &status);
   if(!status) {
     glGetProgramInfoLog(program, 512, 0, message);
-    std::cerr << "Program linking failed! Message: " << message << std::endl;
+    spdlog::error("Program linking failed! Message: {}", message);
     glDeleteProgram(program);
     program = -1;
   }
@@ -58,6 +61,45 @@ Program::Program(const Glib::RefPtr<Gdk::GLContext>& ctx, const char* vertSource
   glDeleteShader(frag);
 
   m_id = program;
+}
+
+Program *Program::from_source(const Glib::RefPtr<Gdk::GLContext>& ctx, const std::string& vert, const std::string& frag) {
+  return new Program(ctx, vert.c_str(), frag.c_str());
+}
+
+Program *Program::from_stream(const Glib::RefPtr<Gdk::GLContext>& ctx, std::istream& vertStream, std::istream& fragStream) {
+  // I might want to use a different approach
+  // here since seeking to the end of stream might
+  // not be supported on all types of streams.
+  vertStream.seekg(0, std::ios::end);
+  size_t len = vertStream.tellg();
+  vertStream.seekg(0, std::ios::beg);
+
+  std::vector<char> vertBuf(len + 1);
+  vertStream.readsome(vertBuf.data(), len);
+  vertBuf[len] = 0;
+
+  fragStream.seekg(0, std::ios::end);
+  len = fragStream.tellg();
+  fragStream.seekg(0, std::ios::beg);
+
+  std::vector<char> fragBuf(len + 1);
+  fragStream.readsome(fragBuf.data(), len);
+  fragBuf[len] = 0;
+
+  return new Program(ctx, vertBuf.data(), fragBuf.data());
+}
+
+Program *Program::from_path(const Glib::RefPtr<Gdk::GLContext>& ctx, const std::filesystem::path& vert, const std::filesystem::path& frag) {
+  std::ifstream vertStream(vert);
+  if(!vertStream.is_open())
+    return nullptr;
+
+  std::ifstream fragStream(frag);
+  if(!fragStream.is_open())
+    return nullptr;
+
+  return from_stream(ctx, vertStream, fragStream);
 }
 
 Program::~Program() {
@@ -95,6 +137,30 @@ void Program::uniform1i(const std::string& name, int value) {
 
 void Program::uniform1f(const std::string& name, float value) {
   glUniform1f(uniformLocation(name), value);
+}
+
+void Program::uniform2f(const std::string& name, const float *value) {
+  glUniform2f(uniformLocation(name), value[0], value[1]);
+}
+
+void Program::uniform3f(const std::string& name, const float *value) {
+  glUniform3f(uniformLocation(name), value[0], value[1], value[2]);
+}
+
+void Program::uniform4f(const std::string& name, const float *value) {
+  glUniform4f(uniformLocation(name), value[0], value[1], value[2], value[3]);
+}
+
+void Program::uniform2f(const std::string& name, float x, float y) {
+  glUniform2f(uniformLocation(name), x, y);
+}
+
+void Program::uniform3f(const std::string& name, float x, float y, float z) {
+  glUniform3f(uniformLocation(name), x, y, z);
+}
+
+void Program::uniform4f(const std::string& name, float x, float y, float z, float w) {
+  glUniform4f(uniformLocation(name), x, y, z, w);
 }
 
 void Program::uniformMat3fv(const std::string& name, int count, bool transpose, const float *data) {

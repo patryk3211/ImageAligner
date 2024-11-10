@@ -1,0 +1,144 @@
+using Gtk 4.0;
+using Adw 1;
+// template 
+Adw.ToolbarView root {
+  [top]
+  HeaderBar {
+    [start]
+    Box {
+      Button btn_open_file {
+        label: _("Open");
+      }
+    }
+  }
+
+  Paned {
+    GLArea main_gl_area {}
+
+    Box {
+      orientation: vertical;
+      hexpand: true;
+
+      StackSwitcher {
+        stack: tool_sidebar;
+      }
+
+      Stack tool_sidebar {
+        // Sequence page
+        StackPage {
+          title: _("Sequence");
+
+          child: Box sequence_box {
+            orientation: vertical;
+            spacing: 8;
+
+            Label {
+              label: _("Images");
+            }
+
+            ScrolledWindow {
+              $gtkmm__CustomObject_SequenceView sequence_view {
+                vexpand: true;
+              }
+            }
+
+            CenterBox {
+              [center]
+              Box {
+                spacing: 8;
+                Label {
+                  label: _("Reference image");
+                }
+                SpinButton ref_image_spin_btn { }
+              }
+            }
+          };
+        }
+
+        // Alignment page
+        StackPage {
+          title: _("Alignment");
+
+          child: Box alignment_box {
+            orientation: vertical;
+
+            Label {
+              label: _("Translation");
+            }
+
+            CenterBox {
+              [center]
+              Box {
+                spacing: 8;
+
+                Label {
+                  label: _("X Offset");
+                }
+                SpinButton x_offset_spin_btn {
+                  adjustment: Adjustment {
+                    step-increment: 1;
+                    lower: -100000;
+                    upper: 100000;
+                  };
+                }
+                Label {
+                  label: _("Y Offset");
+                }
+                SpinButton y_offset_spin_btn {
+                  adjustment: Adjustment {
+                    step-increment: 1;
+                    lower: -100000;
+                    upper: 100000;
+                  };
+                }
+              }
+            }
+            AspectFrame {
+              child: GLArea alignment_view { };
+              vexpand: true;
+              obey-child: false;
+            }
+            CenterBox {
+              [start]
+              Button align_prev_img {
+                label: _("Prev");
+              }
+              [center]
+              Box {
+                spacing: 8;
+                Button align_pick_area {
+                  label: _("Pick area");
+                }
+                Box {
+                  spacing: 8;
+                  orientation: vertical;
+
+                  Label {
+                    label: _("Display type");
+                  }
+                  SpinButton align_view_display_type {
+                    adjustment: Adjustment {
+                      step-increment: 1;
+                      lower: 0;
+                      upper: 2;
+                    };
+                  }
+                  Label {
+                    label: _("Parameter");
+                  }
+                  SpinButton align_view_display_param {
+                    digits: 2;
+                  }
+                }
+              }
+              [end]
+              Button align_next_img {
+                label: _("Next");
+              }
+            }
+          };
+        }
+      }
+    }
+  }
+}
