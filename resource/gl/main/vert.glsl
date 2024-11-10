@@ -5,7 +5,6 @@ in vec2 a_UV;
 
 out vec2 p_UV;
 
-// uniform mat4 u_Proj;
 uniform mat4 u_View;
 uniform mat3 u_Transform;
 

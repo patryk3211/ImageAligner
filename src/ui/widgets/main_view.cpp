@@ -46,18 +46,29 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   m_offset[1] = 0;
   m_scale = get_width();
 
+  auto& refSeqImg = m_state->m_sequence->image(m_state->m_sequence->referenceImage());
+  auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg.m_fileIndex);
+  double pixelSize = 1.0 / refParams.width();
+
   int x = 0, y = 0;
   for(int i = 0; i < m_state->m_sequence->imageCount(); ++i) {
     auto& imgSeq = m_state->m_sequence->image(i);
     auto imageView = std::make_shared<ViewImage>(*this);
     imageView->m_sequenceImageIndex = i;
     imageView->load_texture(m_state->m_imageFile, imgSeq.m_fileIndex);
-    imageView->m_matrix[6] = x;
-    imageView->m_matrix[7] = y;
-    if(++x > 5) {
-      x = 0;
-      ++y;
+    if(imgSeq.m_registration)
+      imageView->registrationHomography(imgSeq.m_registration->m_homographyMatrix, pixelSize);
+
+    if(i == m_state->m_sequence->referenceImage()) {
+      // Reference image gets an identity homography matrix
+      imageView->resetHomography();
     }
+    // imageView->m_matrix[6] = x;
+    // imageView->m_matrix[7] = y;
+    // if(++x > 5) {
+    //   x = 0;
+    //   ++y;
+    // }
     m_images.push_back(imageView);
   }
 
@@ -127,26 +138,12 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
 
   float aspect = (float)get_width() / get_height();
   float scaleFactor = m_scale / get_width();
-
-  // const float projectionMatrix[] = {
-  //   (float)1.0 / get_width(), 0, 0, 0,
-  //   0, -(float)1.0 / get_height(), 0, 0,
-  //   0, 0, 0, 0,
-  //   0, 0, 0, 1
-  // };
-  // const float viewMatrix[] = {
-  //   m_scale, 0, 0, 0,
-  //   0, m_scale, 0, 0,
-  //   0, 0, 1, 0,
-  //   -m_offset[0] * m_scale, -m_offset[1] * m_scale, 0, 1
-  // };
   const float viewMatrix[] = {
     scaleFactor, 0.0, 0.0, 0.0,
     0.0, -scaleFactor * aspect, 0.0, 0.0,
     0.0, 0.0, 1.0, 0.0,
     m_offset[0] * m_scale, -m_offset[1] * m_scale, 0.0, 1.0,
   };
-  // m_imgProgram->uniformMat4fv("u_Proj", 1, false, projectionMatrix);
   m_imgProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
   m_imgProgram->uniform1i("u_Texture", 0);
 
@@ -167,7 +164,7 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_selectProgram->use();
   m_selectProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
   m_selectProgram->uniform4f("u_Selection", m_selection);
-  m_selectProgram->uniform1f("u_Scale", m_scale / get_width());
+  m_selectProgram->uniform1f("u_Scale", scaleFactor);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   // Print all errors that occurred
@@ -185,8 +182,8 @@ void MainView::dragBegin(double startX, double startY) {
     m_savedOffset[1] = m_offset[1];
   } else {
     // These translations are absolutely insane
-    m_selection[0] = (startX - (float)get_width() / 2) * 2 / m_scale - m_offset[0] * get_width();
-    m_selection[1] = (startY - (float)get_height() / 2) * 2 / m_scale - m_offset[1] * get_height();
+    m_selection[0] = (startX * 2 - (float)get_width()) / m_scale - m_offset[0] * get_width();
+    m_selection[1] = (startY * 2 - (float)get_height()) / m_scale - m_offset[1] * get_height();
   }
 }
 
@@ -233,10 +230,7 @@ ViewImage::ViewImage(GLAreaPlus& area) {
   m_texture = area.createTexture();
   m_colorMultiplier = 10;
 
-  memset(m_matrix, 0, sizeof(m_matrix));
-  m_matrix[0] = 1;
-  m_matrix[4] = 1;
-  m_matrix[8] = 1;
+  resetHomography();
 }
 
 // 2 floats for position, 2 for UV
@@ -292,6 +286,27 @@ void ViewImage::load_texture(Img::ImageProvider& image, int index) {
   auto data = image.getPixels(params);
   m_texture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
   make_vertices(1.0, 1.0 * ((float)params.height() / params.width()));
+}
+
+void ViewImage::registrationHomography(const double *homography, double refPixelSize) {
+  m_matrix[0] = homography[0];
+  m_matrix[3] = homography[1];
+  m_matrix[6] = homography[2] * refPixelSize;
+
+  m_matrix[1] = homography[3];
+  m_matrix[4] = homography[4];
+  m_matrix[7] = -homography[5] * refPixelSize;
+
+  m_matrix[2] = homography[6];
+  m_matrix[5] = homography[7];
+  m_matrix[8] = homography[8];
+}
+
+void ViewImage::resetHomography() {
+  memset(m_matrix, 0, sizeof(m_matrix));
+  m_matrix[0] = 1;
+  m_matrix[4] = 1;
+  m_matrix[8] = 1;
 }
 
 void ViewImage::render(GL::Program& program) {

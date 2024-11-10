@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gtkmm/spinbutton.h"
+#include "img/sequence.hpp"
 #include "ui/widgets/gl/program.hpp"
 #include "ui/widgets/gl/texture.hpp"
 #include "ui/widgets/gl_area_plus.hpp"
@@ -27,6 +28,10 @@ class AlignmentView : public GLAreaPlus {
 
   float m_refAspect;
   float m_viewSection[4];
+
+  double m_pixelSize;
+  Img::ImageRegistration* m_imageRegistration;
+  float m_adjustedHomography[9];
   
 public:
   AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);

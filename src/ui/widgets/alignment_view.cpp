@@ -73,6 +73,7 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_program->uniform1i("u_AlignTexture", 1);
 
   m_program->uniform4f("u_ViewSelection", m_viewSection);
+  m_program->uniformMat3fv("u_Homography", 1, false, m_adjustedHomography);
 
   int viewType = static_cast<int>(m_viewTypeBtn->get_value());
   m_program->uniform1i("u_DisplayType", viewType);
@@ -96,6 +97,14 @@ void AlignmentView::referenceChanged() {
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
 
+  m_pixelSize = 1.0 / params.width();
+  m_refAspect = (float)params.width() / params.height();
+
+  if(m_imageRegistration) {
+    m_adjustedHomography[6] = m_imageRegistration->m_homographyMatrix[2] * m_pixelSize;
+    m_adjustedHomography[7] = m_imageRegistration->m_homographyMatrix[5] * m_pixelSize;
+  }
+
   // Make large images use a subset of pixels to save VRAM
   // int scale = params.width() / 500;
   // if(scale < 0) scale = 1;
@@ -109,7 +118,6 @@ void AlignmentView::referenceChanged() {
 
   auto data = m_state->m_imageFile.getPixels(params);
   m_refTexture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
-  m_refAspect = (float)params.width() / params.height();
 
   queue_draw();
 }
@@ -145,6 +153,30 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
 
   auto& seqImg = m_state->m_sequence->image(selectedIndex);
   auto params = m_state->m_imageFile.getImageParameters(seqImg.m_fileIndex);
+  if(seqImg.m_registration) {
+    m_imageRegistration = &*seqImg.m_registration;
+    spdlog::info("Got");
+
+    double* homography = m_imageRegistration->m_homographyMatrix;
+
+    m_adjustedHomography[0] = homography[0];
+    m_adjustedHomography[3] = homography[1];
+    m_adjustedHomography[6] = -homography[2] * m_pixelSize;
+
+    m_adjustedHomography[1] = homography[3];
+    m_adjustedHomography[4] = homography[4];
+    m_adjustedHomography[7] = homography[5] * m_pixelSize * m_refAspect;
+
+    m_adjustedHomography[2] = homography[6];
+    m_adjustedHomography[5] = homography[7];
+    m_adjustedHomography[8] = homography[8];
+  } else {
+    m_imageRegistration = 0;
+    memset(m_adjustedHomography, 0, sizeof(m_adjustedHomography));
+    m_adjustedHomography[0] = 1;
+    m_adjustedHomography[4] = 1;
+    m_adjustedHomography[8] = 1;
+  }
 
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);

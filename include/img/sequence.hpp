@@ -28,8 +28,13 @@ struct ImageStats {
 };
 
 struct ImageRegistration {
-  long m_transX;
-  long m_transY;
+  float m_FWHM;
+  float m_weightedFWHM;
+  float m_roundness;
+  double m_quality;
+  float m_backgroundLevel;
+  int m_numberOfStars;
+  double m_homographyMatrix[9];
 };
 
 struct SequenceImage {
@@ -82,6 +87,7 @@ public:
   int layerCount() const;
 
   const SequenceImage& image(int index) const;
+  SequenceImage& image(int index);
 
   static std::shared_ptr<Sequence> readSequence(const std::filesystem::path& file);
   static std::shared_ptr<Sequence> readStream(std::istream& stream);

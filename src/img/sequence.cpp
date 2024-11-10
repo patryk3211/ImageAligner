@@ -29,7 +29,7 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
 
   char line[512];
   const char* scanfmt = 0;
-  int imageIndex = 0, statIndex = 0;
+  int imageIndex = 0, statIndex = 0, regIndex = 0;
   while(stream.good()) {
     stream.getline(line, 512);
     switch(line[0]) {
@@ -153,7 +153,23 @@ std::shared_ptr<Img::Sequence> Img::Sequence::readStream(std::istream& stream) {
       // case 'D':
       //   std::cout << "Warning! D line is currently unsupported in sequences!" << std::endl;
       //   break;
-      // case 'R':
+      case 'R': {
+        // TODO: Read the channel parameter
+        ImageRegistration reg;
+        int tokenCount = sscanf(line + 3, "%g %g %g %lg %g %d H %lg %lg %lg %lg %lg %lg %lg %lg %lg",
+                                &reg.m_FWHM, &reg.m_weightedFWHM, &reg.m_roundness,
+                                &reg.m_quality, &reg.m_backgroundLevel, &reg.m_numberOfStars,
+                                &reg.m_homographyMatrix[0], &reg.m_homographyMatrix[1], &reg.m_homographyMatrix[2],
+                                &reg.m_homographyMatrix[3], &reg.m_homographyMatrix[4], &reg.m_homographyMatrix[5],
+                                &reg.m_homographyMatrix[6], &reg.m_homographyMatrix[7], &reg.m_homographyMatrix[8]);
+
+        if(tokenCount != 15) {
+          spdlog::error("Sequence registration malformed");
+          return nullptr;
+        }
+        sequence.m_images[regIndex++].m_registration = reg;
+        break;
+      }
       case 0:
         // Ignore empty line
         break;
@@ -237,6 +253,10 @@ char Img::Sequence::imageFormat() const { return m_imageFormat; }
 int Img::Sequence::layerCount() const { return m_layerCount; }
 
 const Img::SequenceImage& Img::Sequence::image(int index) const {
+  return m_images[index];
+}
+
+Img::SequenceImage& Img::Sequence::image(int index) {
   return m_images[index];
 }
 

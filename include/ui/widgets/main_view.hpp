@@ -23,6 +23,8 @@ public:
 
   void make_vertices(float scaleX, float scaleY);
   void load_texture(Img::ImageProvider& image, int index);
+  void registrationHomography(const double *homography, double refPixelSize);
+  void resetHomography();
 
   void render(GL::Program& program);
 };
