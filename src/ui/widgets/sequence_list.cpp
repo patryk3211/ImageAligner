@@ -1,19 +1,10 @@
 #include "ui/widgets/sequence_list.hpp"
-#include "gtkmm/singleselection.h"
 #include "ui/state.hpp"
 
 #include <string>
+#include <format>
 
 using namespace UI;
-
-SequenceListItem::SequenceListItem(int id, bool selected)
-  : ObjectBase("SequenceListItem")
-  , m_id(*this, "id", id)
-  , m_selected(*this, "selected", selected) { }
-
-Glib::RefPtr<SequenceListItem> SequenceListItem::create(int id, bool selected) {
-  return Glib::make_refptr_for_instance<SequenceListItem>(new SequenceListItem(id, selected));
-}
 
 SequenceView::SequenceView() : Glib::ObjectBase("SequenceView") {
   /* Dummy constructor for type registration */
@@ -22,18 +13,27 @@ SequenceView::SequenceView() : Glib::ObjectBase("SequenceView") {
 SequenceView::SequenceView(BaseObjectType *cobject, const Glib::RefPtr<Gtk::Builder>& builder)
   : Glib::ObjectBase("SequenceView")
   , Gtk::ColumnView(cobject)
-  , m_model(Gio::ListStore<SequenceListItem>::create())
+  , m_model(Gio::ListStore<Image>::create())
   , m_idColFactory(Gtk::SignalListItemFactory::create())
-  , m_selectColFactory(Gtk::SignalListItemFactory::create()) {
+  , m_selectColFactory(Gtk::SignalListItemFactory::create())
+  , m_xOffsetFactory(Gtk::SignalListItemFactory::create())
+  , m_yOffsetFactory(Gtk::SignalListItemFactory::create()) {
   // Create column factories
   m_idColFactory->signal_setup().connect(sigc::ptr_fun(&SequenceView::labelColSetup));
   m_idColFactory->signal_bind().connect(sigc::ptr_fun(&SequenceView::idColBind));
   m_selectColFactory->signal_setup().connect(sigc::ptr_fun(&SequenceView::checkboxColSetup));
   m_selectColFactory->signal_bind().connect(sigc::ptr_fun(&SequenceView::selectColBind));
 
+  m_xOffsetFactory->signal_setup().connect(sigc::ptr_fun(&SequenceView::labelColSetup));
+  m_xOffsetFactory->signal_bind().connect(sigc::ptr_fun(&SequenceView::xColBind));
+  m_yOffsetFactory->signal_setup().connect(sigc::ptr_fun(&SequenceView::labelColSetup));
+  m_yOffsetFactory->signal_bind().connect(sigc::ptr_fun(&SequenceView::yColBind));
+
   // Append columns
   append_column(Gtk::ColumnViewColumn::create("Id", m_idColFactory));
   append_column(Gtk::ColumnViewColumn::create("Selected", m_selectColFactory));
+  append_column(Gtk::ColumnViewColumn::create("X Offset", m_xOffsetFactory));
+  append_column(Gtk::ColumnViewColumn::create("Y Offset", m_yOffsetFactory));
   
   // Set selection model
   set_model(Gtk::SingleSelection::create(m_model));
@@ -41,7 +41,7 @@ SequenceView::SequenceView(BaseObjectType *cobject, const Glib::RefPtr<Gtk::Buil
   m_refImageSelector = builder->get_widget<Gtk::SpinButton>("ref_image_spin_btn");
 }
 
-Glib::RefPtr<Gio::ListStore<SequenceListItem>>& SequenceView::model() {
+Glib::RefPtr<Gio::ListStore<Image>>& SequenceView::model() {
   return m_model;
 }
 
@@ -51,8 +51,8 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
 
   // Populate with new sequence
   for(int i = 0; i < state->m_sequence->imageCount(); ++i) {
-    auto& img = state->m_sequence->image(i);
-    m_model->append(SequenceListItem::create(img.m_fileIndex, img.m_included));
+    // auto& img = state->m_sequence->image(i);
+    m_model->append(Image::create(i, *state->m_sequence, state->m_imageFile));
   }
 
   // Set reference image index
@@ -71,21 +71,29 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
 }
 
 void SequenceView::prevImage() {
-  uint selected = getSelected();
+  uint selected = getSelectedIndex();
   if(selected > 0) {
     get_model()->select_item(selected - 1, true);
   }
 }
 
 void SequenceView::nextImage() {
-  uint selected = getSelected();
+  uint selected = getSelectedIndex();
   if(selected < m_model->get_n_items() - 1) {
     get_model()->select_item(selected + 1, true);
   }
 }
 
-uint SequenceView::getSelected() {
+uint SequenceView::getSelectedIndex() {
   return dynamic_cast<Gtk::SingleSelection&>(*get_model()).get_selected();
+}
+
+Glib::RefPtr<Image> SequenceView::getSelected() {
+  return m_model->get_item(getSelectedIndex());
+}
+
+Glib::RefPtr<Image> SequenceView::getImage(int index) {
+  return m_model->get_item(index);
 }
 
 void SequenceView::labelColSetup(const ListItem& item) {
@@ -99,13 +107,35 @@ void SequenceView::checkboxColSetup(const ListItem& item) {
 }
 
 void SequenceView::idColBind(const ListItem& item) {
-  auto& itemRef = dynamic_cast<SequenceListItem&>(*item->get_item());
-  std::string text = std::to_string(itemRef.m_id.get_value());
-  dynamic_cast<Gtk::Label&>(*item->get_child()).set_text(text);
+  auto& itemRef = dynamic_cast<Image&>(*item->get_item());
+  auto& label = dynamic_cast<Gtk::Label&>(*item->get_child());
+
+  Glib::Binding::bind_property(itemRef.propertyIndex(), label.property_label(), Glib::Binding::Flags::SYNC_CREATE, [](const int& index) -> std::optional<Glib::ustring> {
+    return std::to_string(index);
+  });
 }
 
 void SequenceView::selectColBind(const ListItem& item) {
-  auto& itemRef = dynamic_cast<SequenceListItem&>(*item->get_item());
-  dynamic_cast<Gtk::CheckButton&>(*item->get_child()).set_active(itemRef.m_selected.get_value());
+  auto& itemRef = dynamic_cast<Image&>(*item->get_item());
+  auto& check = dynamic_cast<Gtk::CheckButton&>(*item->get_child());
+  Glib::Binding::bind_property(itemRef.propertyIncluded(), check.property_active(), Glib::Binding::Flags::BIDIRECTIONAL | Glib::Binding::Flags::SYNC_CREATE);
+}
+
+void SequenceView::xColBind(const ListItem& item) {
+  auto& itemRef = dynamic_cast<Image&>(*item->get_item());
+  auto& label = dynamic_cast<Gtk::Label&>(*item->get_child());
+
+  Glib::Binding::bind_property(itemRef.propertyXOffset(), label.property_label(), Glib::Binding::Flags::SYNC_CREATE, [](const double& value) {
+    return std::format("{:.2f}", value);
+  });
+}
+
+void SequenceView::yColBind(const ListItem& item) {
+  auto& itemRef = dynamic_cast<Image&>(*item->get_item());
+  auto& label = dynamic_cast<Gtk::Label&>(*item->get_child());
+
+  Glib::Binding::bind_property(itemRef.propertyYOffset(), label.property_label(), Glib::Binding::Flags::SYNC_CREATE, [](const double& value) {
+    return std::format("{:.2f}", value);
+  });
 }
 

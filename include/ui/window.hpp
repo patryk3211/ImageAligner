@@ -9,9 +9,6 @@
 namespace UI {
 
 class Window : public Gtk::Window {
-  Glib::RefPtr<Gtk::FileDialog> m_dialog;
-
-  std::shared_ptr<UI::State> m_state;
 
 public:
   SequenceView* m_sequenceView;
@@ -23,10 +20,6 @@ public:
   virtual ~Window() = default;
 
   void setState(const std::shared_ptr<UI::State>& state);
-
-private:
-  void openFileDialog();
-  void openFileFinish(Glib::RefPtr<Gio::AsyncResult>& result);
 };
 
 } // namespace UI

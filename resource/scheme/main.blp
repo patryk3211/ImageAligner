@@ -1,14 +1,14 @@
 using Gtk 4.0;
 using Adw 1;
-// template 
+
 Adw.ToolbarView root {
   [top]
   HeaderBar {
     [start]
-    Box {
-      Button btn_open_file {
-        label: _("Open");
-      }
+    MenuButton {
+      icon-name: "open-menu-symbolic";
+      menu-model: primary_menu;
+      primary: true;
     }
   }
 
@@ -46,6 +46,9 @@ Adw.ToolbarView root {
               [center]
               Box {
                 spacing: 8;
+                CheckButton show_only_selected_btn {
+                  label: _("Hide unselected");
+                }
                 Label {
                   label: _("Reference image");
                 }
@@ -77,6 +80,7 @@ Adw.ToolbarView root {
                 SpinButton x_offset_spin_btn {
                   adjustment: Adjustment {
                     step-increment: 1;
+                    page-increment: 10;
                     lower: -100000;
                     upper: 100000;
                   };
@@ -87,6 +91,7 @@ Adw.ToolbarView root {
                 SpinButton y_offset_spin_btn {
                   adjustment: Adjustment {
                     step-increment: 1;
+                    page-increment: 10;
                     lower: -100000;
                     upper: 100000;
                   };
@@ -142,3 +147,17 @@ Adw.ToolbarView root {
     }
   }
 }
+
+menu primary_menu {
+  section {
+    item {
+      label: _("Open");
+      action: "app.open";
+    }
+    item {
+      label: _("Save");
+      action: "app.save";
+    }
+  }
+}
+

@@ -26,6 +26,9 @@ class AlignmentView : public GLAreaPlus {
   Gtk::SpinButton *m_viewTypeBtn;
   Gtk::SpinButton *m_viewParamBtn;
 
+  Gtk::SpinButton *m_xOffsetBtn;
+  Gtk::SpinButton *m_yOffsetBtn;
+
   float m_refAspect;
   float m_viewSection[4];
 
@@ -46,6 +49,8 @@ protected:
   void referenceChanged();
   void sequenceViewSelectionChanged(uint position, uint nitems);
   void viewTypeChanged();
+  void xOffsetChanged();
+  void yOffsetChanged();
   void pickArea();
 };
 

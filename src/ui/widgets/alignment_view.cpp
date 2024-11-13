@@ -30,8 +30,14 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
   m_viewParamBtn = builder->get_widget<Gtk::SpinButton>("align_view_display_param");
   m_viewParamBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::queue_draw));
 
+  m_xOffsetBtn = builder->get_widget<Gtk::SpinButton>("x_offset_spin_btn");
+  m_xOffsetBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::xOffsetChanged));
+  m_yOffsetBtn = builder->get_widget<Gtk::SpinButton>("y_offset_spin_btn");
+  m_yOffsetBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::yOffsetChanged));
+
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
+  m_imageRegistration = 0;
   m_refAspect = 0;
 
   viewTypeChanged();
@@ -149,15 +155,25 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
   if(m_state == nullptr || !get_context())
     return;
 
-  uint selectedIndex = m_sequenceView->getSelected();
+  uint selectedIndex = m_sequenceView->getSelectedIndex();
 
   auto& seqImg = m_state->m_sequence->image(selectedIndex);
   auto params = m_state->m_imageFile.getImageParameters(seqImg.m_fileIndex);
-  if(seqImg.m_registration) {
+  if(seqImg.m_registration && selectedIndex != m_state->m_sequence->referenceImage()) {
     m_imageRegistration = &*seqImg.m_registration;
-    spdlog::info("Got");
 
     double* homography = m_imageRegistration->m_homographyMatrix;
+
+    // If scale is zero the image will not be visible,
+    // I'm not sure if this is correct.
+    if(homography[0] == 0 || homography[4] == 0) {
+      homography[0] = 1;
+      homography[4] = 1;
+    }
+
+    if(homography[8] == 0) {
+      homography[8] = 1;
+    }
 
     m_adjustedHomography[0] = homography[0];
     m_adjustedHomography[3] = homography[1];
@@ -170,12 +186,22 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
     m_adjustedHomography[2] = homography[6];
     m_adjustedHomography[5] = homography[7];
     m_adjustedHomography[8] = homography[8];
+
+    m_xOffsetBtn->set_value(homography[2]);
+    m_yOffsetBtn->set_value(homography[5]);
+    m_xOffsetBtn->set_editable(true);
+    m_yOffsetBtn->set_editable(true);
   } else {
     m_imageRegistration = 0;
     memset(m_adjustedHomography, 0, sizeof(m_adjustedHomography));
     m_adjustedHomography[0] = 1;
     m_adjustedHomography[4] = 1;
     m_adjustedHomography[8] = 1;
+
+    m_xOffsetBtn->set_value(0);
+    m_yOffsetBtn->set_value(0);
+    m_xOffsetBtn->set_editable(false);
+    m_yOffsetBtn->set_editable(false);
   }
 
   // Read only the first layer
@@ -196,6 +222,30 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
   m_alignTexture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
 
   queue_draw();
+}
+
+void AlignmentView::xOffsetChanged() {
+  if(m_imageRegistration) {
+    double xOffset = m_xOffsetBtn->get_value();
+    m_imageRegistration->m_homographyMatrix[2] = xOffset;
+    m_adjustedHomography[6] = -xOffset * m_pixelSize;
+
+    m_mainView->refreshRegistration(m_sequenceView->getSelectedIndex());
+    m_sequenceView->getSelected()->refresh();
+    queue_draw();
+  }
+}
+
+void AlignmentView::yOffsetChanged() {
+  if(m_imageRegistration) {
+    double yOffset = m_yOffsetBtn->get_value();
+    m_imageRegistration->m_homographyMatrix[5] = yOffset;
+    m_adjustedHomography[7] = yOffset * m_pixelSize * m_refAspect;
+
+    m_mainView->refreshRegistration(m_sequenceView->getSelectedIndex());
+    m_sequenceView->getSelected()->refresh();
+    queue_draw();
+  }
 }
 
 void AlignmentView::pickArea() {

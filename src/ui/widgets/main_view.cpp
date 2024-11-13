@@ -29,9 +29,14 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
   scrollController->set_flags(Gtk::EventControllerScroll::Flags::VERTICAL);
   add_controller(scrollController);
 
+  m_hideUnselected = builder->get_widget<Gtk::CheckButton>("show_only_selected_btn");
+  m_hideUnselected->signal_toggled().connect(sigc::mem_fun(*this, &MainView::queue_draw));
+
   m_offset[0] = 0;
   m_offset[1] = 0;
   m_scale = 1;
+
+  m_pixelSize = 1;
 
   memset(m_selection, 0, sizeof(m_selection));
   m_makeSelection = false;
@@ -48,30 +53,35 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
 
   auto& refSeqImg = m_state->m_sequence->image(m_state->m_sequence->referenceImage());
   auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg.m_fileIndex);
-  double pixelSize = 1.0 / refParams.width();
+  m_pixelSize = 1.0 / refParams.width();
 
   int x = 0, y = 0;
   for(int i = 0; i < m_state->m_sequence->imageCount(); ++i) {
-    auto& imgSeq = m_state->m_sequence->image(i);
-    auto imageView = std::make_shared<ViewImage>(*this);
-    imageView->m_sequenceImageIndex = i;
-    imageView->load_texture(m_state->m_imageFile, imgSeq.m_fileIndex);
-    if(imgSeq.m_registration)
-      imageView->registrationHomography(imgSeq.m_registration->m_homographyMatrix, pixelSize);
-
-    if(i == m_state->m_sequence->referenceImage()) {
-      // Reference image gets an identity homography matrix
-      imageView->resetHomography();
-    }
-    // imageView->m_matrix[6] = x;
-    // imageView->m_matrix[7] = y;
-    // if(++x > 5) {
-    //   x = 0;
-    //   ++y;
-    // }
+    auto imageView = std::make_shared<ViewImage>(*this, m_sequenceView->getImage(i));
     m_images.push_back(imageView);
   }
 
+  queue_draw();
+}
+
+std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
+  for(auto& view : m_images) {
+    if(view->m_sequenceImageIndex == seqIndex)
+      return view;
+  }
+  return nullptr;
+}
+
+void MainView::refreshRegistration(int index) {
+  auto view = getView(index);
+  if(index == m_state->m_sequence->referenceImage()) {
+    view->resetHomography();
+  } else {
+    auto seqImg = m_state->m_sequence->image(index);
+    if(seqImg.m_registration) {
+      view->registrationHomography(seqImg.m_registration->m_homographyMatrix, m_pixelSize);
+    }
+  }
   queue_draw();
 }
 
@@ -82,7 +92,7 @@ void MainView::requestSelection(const std::function<void(float, float, float, fl
 }
 
 void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
-  uint selectedIndex = m_sequenceView->getSelected();
+  uint selectedIndex = m_sequenceView->getSelectedIndex();
 
   // Extract selected image object
   auto iter = m_images.begin();
@@ -127,6 +137,9 @@ void MainView::disableVertexAttribs() {
   glDisableVertexAttribArray(0);
 }
 
+#define FLAG_DRAW_BORDER 1
+#define FLAG_DRAW_UNSELECTED 2
+
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -147,13 +160,18 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_imgProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
   m_imgProgram->uniform1i("u_Texture", 0);
 
+  bool hideUnselected = m_hideUnselected->get_active();
   for(auto iter = m_images.rbegin(); iter != m_images.rend(); ++iter) {
-    auto image = *iter;
-    if(image == m_images.front()) {
-      m_imgProgram->uniform1i("u_Highlight", 1);
-    } else {
-      m_imgProgram->uniform1i("u_Highlight", 0);
+    auto& image = *iter;
+    int flags = 0;
+    if(!image->imageObject()->getIncluded()) {
+      if(hideUnselected)
+        continue;
+      // Indicate that the image is not selected
+      flags |= FLAG_DRAW_UNSELECTED;
     }
+    flags |= image == m_images.front() ? FLAG_DRAW_BORDER : 0;
+    m_imgProgram->uniform1i("u_Flags", flags);
     image->render(*m_imgProgram);
   }
 
@@ -225,23 +243,31 @@ bool MainView::scroll(double x, double y) {
   return true;
 }
 
-ViewImage::ViewImage(GLAreaPlus& area) {
+double MainView::pixelSize() const {
+  return m_pixelSize;
+}
+
+ViewImage::ViewImage(MainView& area, const Glib::RefPtr<Image>& image)
+  : m_imageObject(image) {
   m_vertices = area.createBuffer();
   m_texture = area.createTexture();
   m_colorMultiplier = 10;
 
+  m_min = 0.0154;
+  m_max = 0.0534;
+
+  m_sequenceImageIndex = image->getIndex();
+  loadTexture(image->getProvider(), m_sequenceImageIndex);
   resetHomography();
+
+  auto& seqImg = image->getSequenceImage();
+  if(seqImg.m_registration && !image->isReference()) {
+    registrationHomography(seqImg.m_registration->m_homographyMatrix, area.pixelSize());
+  }
 }
 
 // 2 floats for position, 2 for UV
 #define BUFFER_STRIDE (2 + 2)
-
-// const float MODEL_TEMPLATE[] = {
-//   -1.0, -1.0,   0.0, 1.0,
-//   -1.0,  1.0,   0.0, 0.0,
-//    1.0, -1.0,   1.0, 1.0,
-//    1.0,  1.0,   1.0, 0.0,
-// };
 
 const float MODEL_TEMPLATE[] = {
   0.0, 0.0,   0.0, 0.0,
@@ -250,7 +276,7 @@ const float MODEL_TEMPLATE[] = {
   1.0, 1.0,   1.0, 1.0,
 };
 
-void ViewImage::make_vertices(float scaleX, float scaleY) {
+void ViewImage::makeVertices(float scaleX, float scaleY) {
   float buffer[BUFFER_STRIDE * 4];
 
   for(int i = 0; i < 4; ++i) {
@@ -267,7 +293,7 @@ void ViewImage::make_vertices(float scaleX, float scaleY) {
   m_vertices->store(sizeof(buffer), buffer);
 }
 
-void ViewImage::load_texture(Img::ImageProvider& image, int index) {
+void ViewImage::loadTexture(Img::ImageProvider& image, int index) {
   auto params = image.getImageParameters(index);
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
@@ -285,7 +311,7 @@ void ViewImage::load_texture(Img::ImageProvider& image, int index) {
 
   auto data = image.getPixels(params);
   m_texture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
-  make_vertices(1.0, 1.0 * ((float)params.height() / params.width()));
+  makeVertices(1.0, 1.0 * ((float)params.height() / params.width()));
 }
 
 void ViewImage::registrationHomography(const double *homography, double refPixelSize) {
@@ -309,9 +335,14 @@ void ViewImage::resetHomography() {
   m_matrix[8] = 1;
 }
 
+Glib::RefPtr<Image> ViewImage::imageObject() {
+  return m_imageObject;
+}
+
 void ViewImage::render(GL::Program& program) {
   program.uniform1f("u_ColorMult", m_colorMultiplier);
   program.uniformMat3fv("u_Transform", 1, false, m_matrix);
+  program.uniform2f("u_Levels", m_min, m_max);
 
   glActiveTexture(GL_TEXTURE0);
   m_texture->bind();

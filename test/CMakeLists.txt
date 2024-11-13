@@ -6,4 +6,5 @@ function(create_test name)
 endfunction(create_test)
 
 create_test(seq_simple_read_test)
+create_test(seq_writeback_test)
 

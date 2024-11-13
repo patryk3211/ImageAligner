@@ -1,22 +1,38 @@
 #version 150 core
 
 in vec2 p_UV;
+in vec2 p_BorderWidth;
 
 out vec4 o_FragColor;
 
 uniform sampler2D u_Texture;
 uniform float u_ColorMult;
-uniform int u_Highlight;
+uniform vec2 u_Levels;
+
+uniform int u_Flags;
+
+#define FLAG_DRAW_BORDER 1
+#define FLAG_DRAW_UNSELECTED 2
+
+vec3 applyLevels(vec3 input, float m, float M) {
+  return (clamp(input, m, M) - m) / (M - m);
+}
 
 void main() {
-  vec4 texCol = texture(u_Texture, p_UV) * u_ColorMult;
+  vec4 texCol = texture(u_Texture, p_UV);
+  vec3 color = applyLevels(texCol.xxx, u_Levels.x, u_Levels.y);
 
-  vec2 centerCoords = p_UV * 2.0 - 1.0;
-  float centDist = max(abs(centerCoords.x), abs(centerCoords.y));
-  if(u_Highlight > 0 && centDist > 0.95) {
-    o_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-  } else {
-    o_FragColor = vec4(texCol.xxx, 1.0);
+  if((u_Flags & FLAG_DRAW_UNSELECTED) != 0) {
+    color *= vec3(1.0, 0.0, 0.0);
   }
+
+  if((u_Flags & FLAG_DRAW_BORDER) != 0) {
+    vec2 pos = p_UV * 2.0 - 1.0;
+    if(abs(pos.x) > p_BorderWidth.x || abs(pos.y) > p_BorderWidth.y) {
+      color = vec3(1.0, 0.0, 0.0);
+    }
+  }
+
+  o_FragColor = vec4(color, 1.0);
 }
 

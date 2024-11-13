@@ -15,8 +15,11 @@ set(COMMON_SRC
 set(EXEC_SOURCE
   src/main.cpp
 
+  src/ui/app.cpp
   src/ui/window.cpp
   src/ui/state.cpp
+
+  src/ui/objects/image.cpp
 
   src/ui/widgets/util.cpp
   src/ui/widgets/sequence_list.cpp
@@ -31,6 +34,7 @@ set(EXEC_SOURCE
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+set(CMAKE_CXX_STANDARD 20)
 
 # Dependencies
 find_package(PkgConfig REQUIRED)

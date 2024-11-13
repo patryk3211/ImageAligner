@@ -28,6 +28,8 @@ struct ImageStats {
 };
 
 struct ImageRegistration {
+  int m_layer;
+
   float m_FWHM;
   float m_weightedFWHM;
   float m_roundness;
@@ -71,6 +73,8 @@ class Sequence {
 public:
   ~Sequence() = default;
 
+  void validate();
+
   void writeStream(std::ostream& stream);
 
   const std::string& name() const;
@@ -85,6 +89,8 @@ public:
   int fzFlag() const;
   char imageFormat() const;
   int layerCount() const;
+
+  int& selectedCount();
 
   const SequenceImage& image(int index) const;
   SequenceImage& image(int index);

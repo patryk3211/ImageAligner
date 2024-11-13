@@ -68,3 +68,43 @@ static int check_stats(const Img::ImageStats& stats, long pixels, long goodPixel
   return 1;
 }
 
+static int check_registration(const Img::ImageRegistration& reg, int layer, float fwhm, float wfwhm, float roundness, double quality,
+                              float backgroundLvl, int numberOfStarts, double h0, double h1, double h2, double h3, double h4,
+                              double h5, double h6, double h7, double h8) {
+  if(reg.m_layer != layer)
+    return 0;
+  if(reg.m_FWHM != fwhm)
+    return 0;
+  if(reg.m_weightedFWHM != wfwhm)
+    return 0;
+  if(reg.m_roundness != roundness)
+    return 0;
+  if(reg.m_quality != quality)
+    return 0;
+  if(reg.m_backgroundLevel != backgroundLvl)
+    return 0;
+  if(reg.m_numberOfStars != numberOfStarts)
+    return 0;
+
+  if(reg.m_homographyMatrix[0] != h0)
+    return 0;
+  if(reg.m_homographyMatrix[1] != h1)
+    return 0;
+  if(reg.m_homographyMatrix[2] != h2)
+    return 0;
+  if(reg.m_homographyMatrix[3] != h3)
+    return 0;
+  if(reg.m_homographyMatrix[4] != h4)
+    return 0;
+  if(reg.m_homographyMatrix[5] != h5)
+    return 0;
+  if(reg.m_homographyMatrix[6] != h6)
+    return 0;
+  if(reg.m_homographyMatrix[7] != h7)
+    return 0;
+  if(reg.m_homographyMatrix[8] != h8)
+    return 0;
+
+  return 1;
+}
+

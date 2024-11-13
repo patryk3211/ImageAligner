@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gtkmm/checkbutton.h"
+#include "ui/objects/image.hpp"
 #include "ui/widgets/gl_area_plus.hpp"
 #include "ui/widgets/sequence_list.hpp"
 #include "img/provider.hpp"
@@ -8,8 +10,10 @@
 
 namespace UI {
 class State;
+class MainView;
 
 class ViewImage {
+  Glib::RefPtr<Image> m_imageObject;
   std::shared_ptr<GL::Buffer> m_vertices;
   std::shared_ptr<GL::Texture> m_texture;
 
@@ -18,13 +22,17 @@ public:
   float m_colorMultiplier;
   int m_sequenceImageIndex;
 
-  ViewImage(GLAreaPlus& area);
+  float m_min;
+  float m_max;
+
+  ViewImage(MainView& area, const Glib::RefPtr<Image>& image);
   ~ViewImage() = default;
 
-  void make_vertices(float scaleX, float scaleY);
-  void load_texture(Img::ImageProvider& image, int index);
+  void makeVertices(float scaleX, float scaleY);
+  void loadTexture(Img::ImageProvider& image, int index);
   void registrationHomography(const double *homography, double refPixelSize);
   void resetHomography();
+  Glib::RefPtr<Image> imageObject();
 
   void render(GL::Program& program);
 };
@@ -34,6 +42,8 @@ class MainView : public GLAreaPlus {
   std::shared_ptr<GL::Program> m_selectProgram;
   std::shared_ptr<UI::State> m_state;
   SequenceView* m_sequenceView;
+
+  Gtk::CheckButton *m_hideUnselected;
 
   std::list<std::shared_ptr<ViewImage>> m_images;
 
@@ -45,6 +55,8 @@ class MainView : public GLAreaPlus {
   bool m_makeSelection;
   std::optional<std::function<void(float, float, float, float)>> m_selectCallback;
 
+  double m_pixelSize;
+
 public:
   MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
   virtual ~MainView() = default;
@@ -52,6 +64,11 @@ public:
   void connectState(const std::shared_ptr<UI::State>& state);
 
   void requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect = 0);
+
+  void refreshRegistration(int index);
+  std::shared_ptr<ViewImage> getView(int seqIndex);
+
+  double pixelSize() const;
 
 protected:
   virtual void realize();
