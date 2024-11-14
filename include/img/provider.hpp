@@ -22,6 +22,9 @@ struct DataType {
   };
 
   static size_t dataSize(const EnumType& type);
+
+  static size_t typeMin(const EnumType& type);
+  static size_t typeMax(const EnumType& type);
 };
 
 

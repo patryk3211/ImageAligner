@@ -32,6 +32,11 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
   m_hideUnselected = builder->get_widget<Gtk::CheckButton>("show_only_selected_btn");
   m_hideUnselected->signal_toggled().connect(sigc::mem_fun(*this, &MainView::queue_draw));
 
+  m_minLevelBtn = builder->get_widget<Gtk::SpinButton>("level_min_btn");
+  m_maxLevelBtn = builder->get_widget<Gtk::SpinButton>("level_max_btn");
+  m_minLevelScale = builder->get_widget<Gtk::Scale>("level_min_scale");
+  m_maxLevelScale = builder->get_widget<Gtk::Scale>("level_max_scale");
+
   m_offset[0] = 0;
   m_offset[1] = 0;
   m_scale = 1;
@@ -66,7 +71,7 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
 
 std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
   for(auto& view : m_images) {
-    if(view->m_sequenceImageIndex == seqIndex)
+    if(view->imageObject()->getIndex() == seqIndex)
       return view;
   }
   return nullptr;
@@ -97,7 +102,7 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   // Extract selected image object
   auto iter = m_images.begin();
   while(iter != m_images.end()) {
-    if((*iter)->m_sequenceImageIndex == selectedIndex)
+    if((*iter)->imageObject()->getIndex() == selectedIndex)
       break;
     ++iter;
   }
@@ -251,13 +256,8 @@ ViewImage::ViewImage(MainView& area, const Glib::RefPtr<Image>& image)
   : m_imageObject(image) {
   m_vertices = area.createBuffer();
   m_texture = area.createTexture();
-  m_colorMultiplier = 10;
 
-  m_min = 0.0154;
-  m_max = 0.0534;
-
-  m_sequenceImageIndex = image->getIndex();
-  loadTexture(image->getProvider(), m_sequenceImageIndex);
+  loadTexture(image->getProvider(), image->getIndex());
   resetHomography();
 
   auto& seqImg = image->getSequenceImage();
@@ -340,9 +340,11 @@ Glib::RefPtr<Image> ViewImage::imageObject() {
 }
 
 void ViewImage::render(GL::Program& program) {
-  program.uniform1f("u_ColorMult", m_colorMultiplier);
   program.uniformMat3fv("u_Transform", 1, false, m_matrix);
-  program.uniform2f("u_Levels", m_min, m_max);
+
+  float min = m_imageObject->getScaledMinLevel();
+  float max = m_imageObject->getScaledMaxLevel();
+  program.uniform2f("u_Levels", min, max);
 
   glActiveTexture(GL_TEXTURE0);
   m_texture->bind();

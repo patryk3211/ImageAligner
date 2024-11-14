@@ -1,5 +1,7 @@
 #include "img/provider.hpp"
 
+#include <spdlog/spdlog.h>
+
 using namespace Img;
 
 size_t DataType::dataSize(const EnumType& type) {
@@ -18,6 +20,35 @@ size_t DataType::dataSize(const EnumType& type) {
     case ULONG:
     case DOUBLE:
       return 8;
+  }
+}
+
+size_t DataType::typeMin(const EnumType& type) {
+  switch(type) {
+    case UBYTE:
+    case USHORT:
+    case UINT:
+    case ULONG:
+      return 0;
+    default:
+      spdlog::error("Type {} not defined in typeMin function", (int)type);
+      return 0;
+  }
+}
+
+size_t DataType::typeMax(const EnumType& type) {
+  switch(type) {
+    case UBYTE:
+      return (1 << 8) - 1;
+    case USHORT:
+      return (1 << 16) - 1;
+    case UINT:
+      return UINT_MAX;
+    case ULONG:
+      return ULONG_MAX;
+    default:
+      spdlog::error("Type {} not defined in typeMax function", (int)type);
+      return 0;
   }
 }
 

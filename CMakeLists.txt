@@ -20,6 +20,7 @@ set(EXEC_SOURCE
   src/ui/state.cpp
 
   src/ui/objects/image.cpp
+  src/ui/objects/matrix.cpp
 
   src/ui/widgets/util.cpp
   src/ui/widgets/sequence_list.cpp

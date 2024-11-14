@@ -19,11 +19,7 @@ class ViewImage {
 
 public:
   float m_matrix[9];
-  float m_colorMultiplier;
-  int m_sequenceImageIndex;
-
-  float m_min;
-  float m_max;
+  // int m_sequenceImageIndex;
 
   ViewImage(MainView& area, const Glib::RefPtr<Image>& image);
   ~ViewImage() = default;
@@ -44,6 +40,11 @@ class MainView : public GLAreaPlus {
   SequenceView* m_sequenceView;
 
   Gtk::CheckButton *m_hideUnselected;
+
+  Gtk::SpinButton *m_minLevelBtn;
+  Gtk::SpinButton *m_maxLevelBtn;
+  Gtk::Scale *m_minLevelScale;
+  Gtk::Scale *m_maxLevelScale;
 
   std::list<std::shared_ptr<ViewImage>> m_images;
 

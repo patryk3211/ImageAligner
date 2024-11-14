@@ -6,7 +6,6 @@ in vec2 p_BorderWidth;
 out vec4 o_FragColor;
 
 uniform sampler2D u_Texture;
-uniform float u_ColorMult;
 uniform vec2 u_Levels;
 
 uniform int u_Flags;

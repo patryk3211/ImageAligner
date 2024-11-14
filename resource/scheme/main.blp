@@ -13,7 +13,32 @@ Adw.ToolbarView root {
   }
 
   Paned {
-    GLArea main_gl_area {}
+    Box {
+      orientation: vertical;
+
+      GLArea main_gl_area {
+        vexpand: true;
+      }
+
+      Box {
+        Label {
+          label: _("Max");
+        }
+        Scale level_max_scale {
+          hexpand: true;
+        }
+        SpinButton level_max_btn {}
+      }
+      Box {
+        Label {
+          label: _("Min");
+        }
+        Scale level_min_scale {
+          hexpand: true;
+        }
+        SpinButton level_min_btn {}
+      }
+    }
 
     Box {
       orientation: vertical;
