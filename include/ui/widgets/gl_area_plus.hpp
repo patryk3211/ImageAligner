@@ -5,6 +5,7 @@
 #include "ui/widgets/gl/buffer.hpp"
 #include "ui/widgets/gl/program.hpp"
 #include "ui/widgets/gl/texture.hpp"
+#include "ui/widgets/gl/vao.hpp"
 
 namespace UI {
 
@@ -20,6 +21,7 @@ public:
   std::shared_ptr<GL::Texture> createTexture();
   std::shared_ptr<GL::Buffer> createBuffer();
   std::shared_ptr<GL::Program> createProgram(const char *vert, const char *frag);
+  std::shared_ptr<GL::VAO> createVertexArray();
 
 protected:
   Glib::RefPtr<Gdk::GLContext> createContext();

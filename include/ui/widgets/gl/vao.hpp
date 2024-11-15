@@ -4,16 +4,17 @@
 
 namespace UI::GL {
 
-class Buffer : public Object {
+class VAO : public Object {
   uint m_id;
 
 public:
-  Buffer(const Glib::RefPtr<Gdk::GLContext>& ctx);
-  virtual ~Buffer();
+  VAO(const Glib::RefPtr<Gdk::GLContext>& ctx);
+  virtual ~VAO();
 
   void bind();
-  void store(uint length, const void *data);
   static void unbind();
+
+  void attribPointer(int index, int count, int type, bool normalized, int stride, uintptr_t offset);
 
   virtual void destroy() override;
 };

@@ -1,5 +1,4 @@
 #include "ui/objects/matrix.hpp"
-#include "glibmm/property.h"
 
 using namespace UI;
 
@@ -55,29 +54,5 @@ void HomographyMatrix::set(int i, double val) {
 
 void HomographyMatrix::set(int col, int row, double val) {
   m_accessArray[col + row * 3]->set_value(val);
-}
-
-void HomographyMatrix::read(double *data, OrderEnum ordering) const {
-  for(uint i = 0; i < 9; ++i) {
-    if(ordering == ROW_MAJOR)
-      data[i] = get(i);
-    else {
-      uint col = i % 3;
-      uint row = i / 3;
-      data[row + col * 3] = get(i);
-    }
-  }
-}
-
-void HomographyMatrix::write(const double *data, OrderEnum ordering) {
-  for(uint i = 0; i < 9; ++i) {
-    if(ordering == ROW_MAJOR)
-      set(i, data[i]);
-    else {
-      uint col = i % 3;
-      uint row = i / 3;
-      set(i, data[row + col * 3]);
-    }
-  }
 }
 

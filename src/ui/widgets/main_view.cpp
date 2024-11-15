@@ -37,6 +37,9 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
   m_minLevelScale = builder->get_widget<Gtk::Scale>("level_min_scale");
   m_maxLevelScale = builder->get_widget<Gtk::Scale>("level_max_scale");
 
+  Glib::Binding::bind_property(m_minLevelBtn->property_adjustment(), m_minLevelScale->property_adjustment(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+  Glib::Binding::bind_property(m_maxLevelBtn->property_adjustment(), m_maxLevelScale->property_adjustment(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+
   m_offset[0] = 0;
   m_offset[1] = 0;
   m_scale = 1;
@@ -63,10 +66,11 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   int x = 0, y = 0;
   for(int i = 0; i < m_state->m_sequence->imageCount(); ++i) {
     auto imageView = std::make_shared<ViewImage>(*this, m_sequenceView->getImage(i));
+    imageView->imageObject()->signalRedraw().connect(sigc::mem_fun(*this, &MainView::queue_draw));
     m_images.push_back(imageView);
   }
 
-  queue_draw();
+  sequenceViewSelectionChanged(0, 0);
 }
 
 std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
@@ -75,19 +79,6 @@ std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
       return view;
   }
   return nullptr;
-}
-
-void MainView::refreshRegistration(int index) {
-  auto view = getView(index);
-  if(index == m_state->m_sequence->referenceImage()) {
-    view->resetHomography();
-  } else {
-    auto seqImg = m_state->m_sequence->image(index);
-    if(seqImg.m_registration) {
-      view->registrationHomography(seqImg.m_registration->m_homographyMatrix, m_pixelSize);
-    }
-  }
-  queue_draw();
 }
 
 void MainView::requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect) {
@@ -119,6 +110,26 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   // ...and put it in the beginning
   m_images.push_front(selectedImage);
 
+  // Change level adjuster bindings
+  for(int i = 0; i < 2; ++i) {
+    if(m_levelBindings[i] != nullptr) {
+      m_levelBindings[i]->unbind();
+      m_levelBindings[i] = nullptr;
+    }
+  }
+ 
+  auto imgObj = selectedImage->imageObject();
+
+  auto minAdj = m_minLevelBtn->get_adjustment();
+  auto maxAdj = m_maxLevelBtn->get_adjustment();
+  minAdj->set_lower(0);
+  minAdj->set_upper(imgObj->getTypeMax());
+  maxAdj->set_lower(0);
+  maxAdj->set_upper(imgObj->getTypeMax());
+
+  m_levelBindings[0] = Glib::Binding::bind_property(imgObj->propertyLevelMin(), m_minLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+  m_levelBindings[1] = Glib::Binding::bind_property(imgObj->propertyLevelMax(), m_maxLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+
   queue_draw();
 }
 
@@ -129,29 +140,16 @@ void MainView::realize() {
   m_selectProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/selector/vert.glsl", "ui/gl/selector/frag.glsl"));
 }
 
-void MainView::enableVertexAttribs() { 
-  glEnableVertexAttribArray(0);
-  glEnableVertexAttribArray(1);
-
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) 0);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (sizeof(float) * 2));
-}
-
-void MainView::disableVertexAttribs() {
-  glDisableVertexAttribArray(1);
-  glDisableVertexAttribArray(0);
-}
-
 #define FLAG_DRAW_BORDER 1
 #define FLAG_DRAW_UNSELECTED 2
 
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
+  spdlog::trace("Main view redraw start");
+
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  // Prepare vertex buffer format
-  enableVertexAttribs();
-
+  // Activate image render program
   m_imgProgram->use();
 
   float aspect = (float)get_width() / get_height();
@@ -180,9 +178,6 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     image->render(*m_imgProgram);
   }
 
-  // Post-render
-  disableVertexAttribs();
-
   // Render selection
   m_selectProgram->use();
   m_selectProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
@@ -196,6 +191,7 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     spdlog::error("GL Error {}", errCode);
   }
 
+  spdlog::trace("Main view redraw end");
   return true;
 }
 
@@ -256,14 +252,18 @@ ViewImage::ViewImage(MainView& area, const Glib::RefPtr<Image>& image)
   : m_imageObject(image) {
   m_vertices = area.createBuffer();
   m_texture = area.createTexture();
+  m_vao = area.createVertexArray();
+
+  m_vao->bind();
+  m_vertices->bind();
+  m_vao->attribPointer(0, 2, GL_FLOAT, false, 4 * sizeof(float), 0);
+  m_vao->attribPointer(1, 2, GL_FLOAT, false, 4 * sizeof(float), 2 * sizeof(float));
 
   loadTexture(image->getProvider(), image->getIndex());
-  resetHomography();
 
-  auto& seqImg = image->getSequenceImage();
-  if(seqImg.m_registration && !image->isReference()) {
-    registrationHomography(seqImg.m_registration->m_homographyMatrix, area.pixelSize());
-  }
+  m_vao->unbind();
+
+  m_pixelSize = area.pixelSize();
 }
 
 // 2 floats for position, 2 for UV
@@ -314,33 +314,28 @@ void ViewImage::loadTexture(Img::ImageProvider& image, int index) {
   makeVertices(1.0, 1.0 * ((float)params.height() / params.width()));
 }
 
-void ViewImage::registrationHomography(const double *homography, double refPixelSize) {
-  m_matrix[0] = homography[0];
-  m_matrix[3] = homography[1];
-  m_matrix[6] = homography[2] * refPixelSize;
-
-  m_matrix[1] = homography[3];
-  m_matrix[4] = homography[4];
-  m_matrix[7] = -homography[5] * refPixelSize;
-
-  m_matrix[2] = homography[6];
-  m_matrix[5] = homography[7];
-  m_matrix[8] = homography[8];
-}
-
-void ViewImage::resetHomography() {
-  memset(m_matrix, 0, sizeof(m_matrix));
-  m_matrix[0] = 1;
-  m_matrix[4] = 1;
-  m_matrix[8] = 1;
-}
-
 Glib::RefPtr<Image> ViewImage::imageObject() {
   return m_imageObject;
 }
 
 void ViewImage::render(GL::Program& program) {
-  program.uniformMat3fv("u_Transform", 1, false, m_matrix);
+  float matrix[9];
+  if(!m_imageObject->isReference()) {
+    m_imageObject->homography().read(matrix);
+
+    // Scale translations by pixel size
+    matrix[2] *=  m_pixelSize;
+    matrix[5] *= -m_pixelSize;
+  } else {
+    // Identity matrix
+    memset(matrix, 0, sizeof(matrix));
+
+    matrix[0] = 1;
+    matrix[4] = 1;
+    matrix[8] = 1;
+  }
+
+  program.uniformMat3fv("u_Transform", 1, true, matrix);
 
   float min = m_imageObject->getScaledMinLevel();
   float max = m_imageObject->getScaledMaxLevel();
@@ -348,9 +343,13 @@ void ViewImage::render(GL::Program& program) {
 
   glActiveTexture(GL_TEXTURE0);
   m_texture->bind();
-
-  m_vertices->bind();
+  m_vao->bind();
 
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  m_vao->unbind();
+  m_texture->unbind();
+
+  m_imageObject->clearRedrawFlag();
 }
 

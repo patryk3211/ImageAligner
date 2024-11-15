@@ -1,7 +1,7 @@
 #version 150 core
 
 in vec2 p_UV;
-in vec2 p_BorderWidth;
+flat in vec2 p_BorderWidth;
 
 out vec4 o_FragColor;
 
@@ -13,8 +13,8 @@ uniform int u_Flags;
 #define FLAG_DRAW_BORDER 1
 #define FLAG_DRAW_UNSELECTED 2
 
-vec3 applyLevels(vec3 input, float m, float M) {
-  return (clamp(input, m, M) - m) / (M - m);
+vec3 applyLevels(vec3 col, float m, float M) {
+  return (clamp(col, m, M) - m) / (M - m);
 }
 
 void main() {

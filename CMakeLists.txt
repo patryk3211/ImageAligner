@@ -32,6 +32,7 @@ set(EXEC_SOURCE
   src/ui/widgets/gl/texture.cpp
   src/ui/widgets/gl/buffer.cpp
   src/ui/widgets/gl/program.cpp
+  src/ui/widgets/gl/vao.cpp
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")

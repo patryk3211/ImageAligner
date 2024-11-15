@@ -164,10 +164,10 @@ void Program::uniform4f(const std::string& name, float x, float y, float z, floa
 }
 
 void Program::uniformMat3fv(const std::string& name, int count, bool transpose, const float *data) {
-  glUniformMatrix3fv(uniformLocation(name), count, transpose, data);
+  glUniformMatrix3fv(uniformLocation(name), count, transpose ? GL_TRUE : GL_FALSE, data);
 }
 
 void Program::uniformMat4fv(const std::string& name, int count, bool transpose, const float *data) {
-  glUniformMatrix4fv(uniformLocation(name), count, transpose, data);
+  glUniformMatrix4fv(uniformLocation(name), count, transpose ? GL_TRUE : GL_FALSE, data);
 }
 

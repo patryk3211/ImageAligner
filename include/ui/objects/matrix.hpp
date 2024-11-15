@@ -41,8 +41,35 @@ public:
   void set(int col, int row, double val);
 
   // Changing ordering to COLUMN_MAJOR effectively transposes the matrix
-  void read(double *data, OrderEnum ordering = ROW_MAJOR) const;
-  void write(const double *data, OrderEnum ordering = ROW_MAJOR);
+  template<typename T>
+  void read(T *data, OrderEnum ordering = ROW_MAJOR) const {
+    static_assert(std::is_convertible_v<double, T>);
+
+    for(uint i = 0; i < 9; ++i) {
+      if(ordering == ROW_MAJOR)
+        data[i] = static_cast<T>(get(i));
+      else {
+        uint col = i % 3;
+        uint row = i / 3;
+        data[row + col * 3] = static_cast<T>(get(i));
+      }
+    }
+  }
+
+  template<typename T>
+  void write(const T *data, OrderEnum ordering = ROW_MAJOR) {
+    static_assert(std::is_convertible_v<T, double>);
+
+    for(uint i = 0; i < 9; ++i) {
+      if(ordering == ROW_MAJOR)
+        set(i, static_cast<double>(data[i]));
+      else {
+        uint col = i % 3;
+        uint row = i / 3;
+        set(i, static_cast<double>(data[row + col * 3]));
+      }
+    }
+  }
 };
 
 }

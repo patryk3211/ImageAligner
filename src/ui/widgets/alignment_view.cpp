@@ -31,9 +31,7 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
   m_viewParamBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::queue_draw));
 
   m_xOffsetBtn = builder->get_widget<Gtk::SpinButton>("x_offset_spin_btn");
-  m_xOffsetBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::xOffsetChanged));
   m_yOffsetBtn = builder->get_widget<Gtk::SpinButton>("y_offset_spin_btn");
-  m_yOffsetBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::yOffsetChanged));
 
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
@@ -65,8 +63,13 @@ void AlignmentView::realize() {
 }
 
 bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
+  spdlog::trace("Alignment view render start");
+
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
+
+  if(!m_referenceImage || !m_alignImage)
+    return true;
 
   m_program->use();
 
@@ -79,15 +82,35 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_program->uniform1i("u_AlignTexture", 1);
 
   m_program->uniform4f("u_ViewSelection", m_viewSection);
-  m_program->uniformMat3fv("u_Homography", 1, false, m_adjustedHomography);
+
+  float matrix[9];
+  if(!m_alignImage->isReference()) {
+    m_alignImage->homography().read(matrix);
+
+    // Scale translations
+    matrix[2] *= -m_pixelSize;
+    matrix[5] *=  m_pixelSize * m_refAspect;
+  } else {
+    // Identity matrix
+    memset(matrix, 0, sizeof(matrix));
+
+    matrix[0] = 1;
+    matrix[4] = 1;
+    matrix[8] = 1;
+  }
+  m_program->uniformMat3fv("u_Homography", 1, true, matrix);
 
   int viewType = static_cast<int>(m_viewTypeBtn->get_value());
   m_program->uniform1i("u_DisplayType", viewType);
   float viewParam = static_cast<float>(m_viewParamBtn->get_value());
   m_program->uniform1f("u_DisplayParam", viewParam);
 
+  m_program->uniform2f("u_RefLevels", m_referenceImage->getScaledMinLevel(), m_referenceImage->getScaledMaxLevel());
+  m_program->uniform2f("u_AlignLevels", m_alignImage->getScaledMinLevel(), m_alignImage->getScaledMaxLevel());
+
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+  spdlog::trace("Alignment view render end");
   return true;
 }
 
@@ -95,27 +118,18 @@ void AlignmentView::referenceChanged() {
   if(m_state == nullptr || !get_context())
     return;
 
-  auto index = static_cast<int>(m_refImgBtn->get_value());
+  spdlog::trace("(AlignmentView) Reference changed");
 
-  auto& seqImg = m_state->m_sequence->image(index);
-  auto params = m_state->m_imageFile.getImageParameters(seqImg.m_fileIndex);
+  auto index = static_cast<int>(m_refImgBtn->get_value());
+  m_referenceImage = m_sequenceView->getImage(index);
+
+  auto params = m_referenceImage->getProvider().getImageParameters(m_referenceImage->getSequenceImage().m_fileIndex);
 
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
 
   m_pixelSize = 1.0 / params.width();
   m_refAspect = (float)params.width() / params.height();
-
-  if(m_imageRegistration) {
-    m_adjustedHomography[6] = m_imageRegistration->m_homographyMatrix[2] * m_pixelSize;
-    m_adjustedHomography[7] = m_imageRegistration->m_homographyMatrix[5] * m_pixelSize;
-  }
-
-  // Make large images use a subset of pixels to save VRAM
-  // int scale = params.width() / 500;
-  // if(scale < 0) scale = 1;
-  // params.setDimension(0, -1, -1, scale);
-  // params.setDimension(1, -1, -1, scale);
 
   if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
     spdlog::error("Not a short type 16 bit image");
@@ -155,63 +169,41 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
   if(m_state == nullptr || !get_context())
     return;
 
-  uint selectedIndex = m_sequenceView->getSelectedIndex();
+  spdlog::trace("(AlignmentView) Sequence view selection changed");
 
-  auto& seqImg = m_state->m_sequence->image(selectedIndex);
-  auto params = m_state->m_imageFile.getImageParameters(seqImg.m_fileIndex);
-  if(seqImg.m_registration && selectedIndex != m_state->m_sequence->referenceImage()) {
-    m_imageRegistration = &*seqImg.m_registration;
+  if(m_xBinding) {
+    m_xBinding->unbind();
+    m_xBinding = nullptr;
+  }
 
-    double* homography = m_imageRegistration->m_homographyMatrix;
+  if(m_yBinding) {
+    m_yBinding->unbind();
+    m_yBinding = nullptr;
+  }
 
-    // If scale is zero the image will not be visible,
-    // I'm not sure if this is correct.
-    if(homography[0] == 0 || homography[4] == 0) {
-      homography[0] = 1;
-      homography[4] = 1;
-    }
-
-    if(homography[8] == 0) {
-      homography[8] = 1;
-    }
-
-    m_adjustedHomography[0] = homography[0];
-    m_adjustedHomography[3] = homography[1];
-    m_adjustedHomography[6] = -homography[2] * m_pixelSize;
-
-    m_adjustedHomography[1] = homography[3];
-    m_adjustedHomography[4] = homography[4];
-    m_adjustedHomography[7] = homography[5] * m_pixelSize * m_refAspect;
-
-    m_adjustedHomography[2] = homography[6];
-    m_adjustedHomography[5] = homography[7];
-    m_adjustedHomography[8] = homography[8];
-
-    m_xOffsetBtn->set_value(homography[2]);
-    m_yOffsetBtn->set_value(homography[5]);
+  m_alignImage = m_sequenceView->getSelected();
+  auto params = m_alignImage->getProvider().getImageParameters(m_alignImage->getSequenceImage().m_fileIndex);
+  if(!m_alignImage->isReference()) {
     m_xOffsetBtn->set_editable(true);
     m_yOffsetBtn->set_editable(true);
+
+    m_xBinding = Glib::Binding::bind_property(m_alignImage->propertyXOffset(), m_xOffsetBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+    m_yBinding = Glib::Binding::bind_property(m_alignImage->propertyYOffset(), m_yOffsetBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
   } else {
     m_imageRegistration = 0;
-    memset(m_adjustedHomography, 0, sizeof(m_adjustedHomography));
-    m_adjustedHomography[0] = 1;
-    m_adjustedHomography[4] = 1;
-    m_adjustedHomography[8] = 1;
-
     m_xOffsetBtn->set_value(0);
     m_yOffsetBtn->set_value(0);
+
     m_xOffsetBtn->set_editable(false);
     m_yOffsetBtn->set_editable(false);
   }
 
+  if(!m_alignSigConn.empty())
+    m_alignSigConn.disconnect();
+  m_alignSigConn = m_alignImage->signalRedraw().connect(sigc::mem_fun(*this, &AlignmentView::queue_draw));
+
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
-
-  // Make large images use a subset of pixels to save VRAM
-  // int scale = params.width() / 500;
-  // if(scale < 0) scale = 1;
-  // params.setDimension(0, -1, -1, scale);
-  // params.setDimension(1, -1, -1, scale);
 
   if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
     spdlog::error("Not a short type 16 bit image");
@@ -222,30 +214,6 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
   m_alignTexture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
 
   queue_draw();
-}
-
-void AlignmentView::xOffsetChanged() {
-  if(m_imageRegistration) {
-    double xOffset = m_xOffsetBtn->get_value();
-    m_imageRegistration->m_homographyMatrix[2] = xOffset;
-    m_adjustedHomography[6] = -xOffset * m_pixelSize;
-
-    m_mainView->refreshRegistration(m_sequenceView->getSelectedIndex());
-    m_sequenceView->getSelected()->refresh();
-    queue_draw();
-  }
-}
-
-void AlignmentView::yOffsetChanged() {
-  if(m_imageRegistration) {
-    double yOffset = m_yOffsetBtn->get_value();
-    m_imageRegistration->m_homographyMatrix[5] = yOffset;
-    m_adjustedHomography[7] = yOffset * m_pixelSize * m_refAspect;
-
-    m_mainView->refreshRegistration(m_sequenceView->getSelectedIndex());
-    m_sequenceView->getSelected()->refresh();
-    queue_draw();
-  }
 }
 
 void AlignmentView::pickArea() {

@@ -26,6 +26,10 @@ void Buffer::bind() {
   glBindBuffer(GL_ARRAY_BUFFER, m_id);
 }
 
+void Buffer::unbind() {
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
 void Buffer::store(uint length, const void *data) {
   prepare_context();
   bind();

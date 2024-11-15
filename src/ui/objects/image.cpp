@@ -14,8 +14,25 @@ Image::Image(int seqIndex, Img::Sequence& sequence, Img::ImageProvider& provider
   , m_maxTypeValue(*this, "type-max", 0)
   , m_sequence(sequence)
   , m_imageProvider(provider) {
-  m_included.get_proxy().signal_changed().connect(sigc::mem_fun(*this, &Image::includedChanged));
+  m_notified = false;
   refresh();
+
+  // Connect signals
+  m_included.get_proxy().signal_changed().connect(sigc::mem_fun(*this, &Image::includedChanged));
+
+  // TODO: I might move all these properties into separate object classes
+  m_minLevel.get_proxy().signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_maxLevel.get_proxy().signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+
+  m_homography.property(0).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(1).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(2).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(3).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(4).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(5).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(6).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(7).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+  m_homography.property(8).signal_changed().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
 }
 
 Img::ImageProvider& Image::getProvider() {
@@ -28,6 +45,17 @@ Img::SequenceImage& Image::getSequenceImage() {
 
 bool Image::isReference() {
   return m_sequence.referenceImage() == m_sequenceIndex.get_value();
+}
+
+void Image::notifyRedraw() {
+  if(!m_notified) {
+    m_redrawSignal.emit();
+    m_notified = true;
+  }
+}
+
+void Image::clearRedrawFlag() {
+  m_notified = false;
 }
 
 void Image::refresh() {
@@ -65,6 +93,8 @@ void Image::includedChanged() {
       m_sequence.selectedCount()--;
     }
   }
+
+  notifyRedraw();
 }
 
 int Image::getIndex() const {
@@ -83,6 +113,18 @@ float Image::getScaledMaxLevel() const {
   return (float)m_maxLevel.get_value() / m_maxTypeValue.get_value();
 }
 
+double Image::getTypeMax() const {
+  return m_maxTypeValue.get_value();
+}
+
+double Image::getLevelMin() const {
+  return m_minLevel.get_value();
+}
+
+double Image::getLevelMax() const {
+  return m_maxLevel.get_value();
+}
+
 Glib::PropertyProxy_ReadOnly<int> Image::propertyIndex() const {
   return m_sequenceIndex.get_proxy();
 }
@@ -99,8 +141,24 @@ Glib::PropertyProxy<double> Image::propertyYOffset() {
   return m_homography.property(2, 1);
 }
 
+Glib::PropertyProxy<double> Image::propertyLevelMin() {
+  return m_minLevel.get_proxy();
+}
+
+Glib::PropertyProxy<double> Image::propertyLevelMax() {
+  return m_maxLevel.get_proxy();
+}
+
+Glib::PropertyProxy<double> Image::propertyTypeMax() {
+  return m_maxTypeValue.get_proxy();
+}
+
 HomographyMatrix& Image::homography() {
   return m_homography;
+}
+
+Image::redraw_signal_type Image::signalRedraw() {
+  return m_redrawSignal;
 }
 
 Glib::RefPtr<Image> Image::create(int seqIndex, Img::Sequence& sequence, Img::ImageProvider& provider) {

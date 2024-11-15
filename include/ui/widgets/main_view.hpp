@@ -1,7 +1,7 @@
 #pragma once
 
-#include "gtkmm/checkbutton.h"
 #include "ui/objects/image.hpp"
+#include "ui/widgets/gl/vao.hpp"
 #include "ui/widgets/gl_area_plus.hpp"
 #include "ui/widgets/sequence_list.hpp"
 #include "img/provider.hpp"
@@ -16,20 +16,20 @@ class ViewImage {
   Glib::RefPtr<Image> m_imageObject;
   std::shared_ptr<GL::Buffer> m_vertices;
   std::shared_ptr<GL::Texture> m_texture;
+  std::shared_ptr<GL::VAO> m_vao;
+
+  double m_pixelSize;
 
 public:
-  float m_matrix[9];
-  // int m_sequenceImageIndex;
-
   ViewImage(MainView& area, const Glib::RefPtr<Image>& image);
   ~ViewImage() = default;
 
+private:
   void makeVertices(float scaleX, float scaleY);
   void loadTexture(Img::ImageProvider& image, int index);
-  void registrationHomography(const double *homography, double refPixelSize);
-  void resetHomography();
-  Glib::RefPtr<Image> imageObject();
 
+public:
+  Glib::RefPtr<Image> imageObject();
   void render(GL::Program& program);
 };
 
@@ -58,6 +58,8 @@ class MainView : public GLAreaPlus {
 
   double m_pixelSize;
 
+  Glib::RefPtr<Glib::Binding> m_levelBindings[2];
+
 public:
   MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
   virtual ~MainView() = default;
@@ -66,7 +68,6 @@ public:
 
   void requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect = 0);
 
-  void refreshRegistration(int index);
   std::shared_ptr<ViewImage> getView(int seqIndex);
 
   double pixelSize() const;
@@ -79,9 +80,6 @@ protected:
   void dragUpdate(double offsetX, double offsetY);
   void dragEnd(double endX, double endY);
   bool scroll(double x, double y);
-
-  void enableVertexAttribs();
-  void disableVertexAttribs();
 
   void sequenceViewSelectionChanged(uint position, uint nitems);
 };

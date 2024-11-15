@@ -27,7 +27,12 @@ Adw.ToolbarView root {
         Scale level_max_scale {
           hexpand: true;
         }
-        SpinButton level_max_btn {}
+        SpinButton level_max_btn {
+          adjustment: Adjustment {
+            step-increment: 1;
+            page-increment: 10;
+          };
+        }
       }
       Box {
         Label {
@@ -36,7 +41,12 @@ Adw.ToolbarView root {
         Scale level_min_scale {
           hexpand: true;
         }
-        SpinButton level_min_btn {}
+        SpinButton level_min_btn {
+          adjustment: Adjustment {
+            step-increment: 1;
+            page-increment: 10;
+          };
+        }
       }
     }
 

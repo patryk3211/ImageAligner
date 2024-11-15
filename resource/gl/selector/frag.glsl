@@ -1,7 +1,7 @@
 #version 150 core
 
 in vec2 p_Pos;
-in vec2 p_BorderWidth;
+flat in vec2 p_BorderWidth;
 
 out vec4 o_FragColor;
 

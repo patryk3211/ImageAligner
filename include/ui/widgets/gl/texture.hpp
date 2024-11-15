@@ -14,6 +14,7 @@ public:
   virtual void destroy() override;
 
   void bind();
+  static void unbind();
 
   void load(uint width, uint height, int srcFormat, int srcType, const void *data, int dstFormat);
 };

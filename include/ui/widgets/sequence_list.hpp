@@ -6,18 +6,6 @@
 namespace UI {
 class State;
 
-// class SequenceListItem : public Glib::Object {
-
-// public:
-//   Glib::Property<int> m_id;
-//   Glib::Property<bool> m_selected;
-
-//   SequenceListItem(int id, bool selected);
-//   virtual ~SequenceListItem() = default;
-
-//   static Glib::RefPtr<SequenceListItem> create(int id, bool selected);
-// };
-
 class SequenceView : public Gtk::ColumnView {
   Glib::RefPtr<Gio::ListStore<Image>> m_model;
 

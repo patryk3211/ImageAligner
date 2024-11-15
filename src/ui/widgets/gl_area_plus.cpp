@@ -77,12 +77,16 @@ std::shared_ptr<GL::Program> GLAreaPlus::createProgram(const char *vert, const c
   return wrap(new GL::Program(get_context(), vert, frag));
 }
 
+std::shared_ptr<GL::VAO> GLAreaPlus::createVertexArray() {
+  return wrap(new GL::VAO(get_context()));
+}
+
 Glib::RefPtr<Gdk::GLContext> GLAreaPlus::createContext() {
   // if(s_contextHolder != 0)
   //   return s_contextHolder->get_context();
 
   auto context = get_native()->get_surface()->create_gl_context();
-  context->set_allowed_apis(get_allowed_apis());
+  context->set_allowed_apis(Gdk::GLApi::GL | Gdk::GLApi::GLES);
   context->set_required_version(3, 2);
   context->realize();
 
@@ -97,11 +101,26 @@ Glib::RefPtr<Gdk::GLContext> GLAreaPlus::createContext() {
 }
 
 void GLAreaPlus::realize() {
-  get_context()->make_current();
+  auto ctx = get_context();
+  ctx->make_current();
 
   int major, minor;
-  get_context()->get_version(major, minor);
-  spdlog::debug("OpenGL context version {}.{}", major, minor);
+  ctx->get_version(major, minor);
+
+  const char* apiStr = 0;
+  switch(ctx->get_api2()) {
+    case Gdk::GLApi::GL:
+      apiStr = "OpenGL";
+      break;
+    case Gdk::GLApi::GLES:
+      apiStr = "OpenGL ES";
+      break;
+    default:
+      apiStr = "NOAPI";
+      break;
+  }
+
+  spdlog::debug("{} context version {}.{}", apiStr, major, minor);
 }
 
 void GLAreaPlus::unrealize() {

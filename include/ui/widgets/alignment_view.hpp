@@ -31,10 +31,15 @@ class AlignmentView : public GLAreaPlus {
 
   float m_refAspect;
   float m_viewSection[4];
-
   double m_pixelSize;
+
   Img::ImageRegistration* m_imageRegistration;
-  float m_adjustedHomography[9];
+  Glib::RefPtr<Image> m_referenceImage;
+  Glib::RefPtr<Image> m_alignImage;
+
+  Glib::RefPtr<Glib::Binding> m_xBinding;
+  Glib::RefPtr<Glib::Binding> m_yBinding;
+  sigc::connection m_alignSigConn;
   
 public:
   AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
@@ -49,8 +54,6 @@ protected:
   void referenceChanged();
   void sequenceViewSelectionChanged(uint position, uint nitems);
   void viewTypeChanged();
-  void xOffsetChanged();
-  void yOffsetChanged();
   void pickArea();
 };
 
