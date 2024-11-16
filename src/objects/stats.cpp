@@ -48,25 +48,6 @@ void Stats::emitModified() {
   m_signalModified.emit();
 }
 
-// void Stats::writeBack() {
-//   m_stats.m_totalPixels = m_totalPixels.get_value();
-//   m_stats.m_goodPixels = m_goodPixels.get_value();
-
-//   m_stats.m_mean = m_mean.get_value();
-//   m_stats.m_median = m_median.get_value();
-//   m_stats.m_sigma = m_sigma.get_value();
-//   m_stats.m_avgDev = m_avgDev.get_value();
-//   m_stats.m_mad = m_mad.get_value();
-//   m_stats.m_sqrtBWMV = m_sqrtBWMV.get_value();
-//   m_stats.m_location = m_location.get_value();
-//   m_stats.m_scale = m_scale.get_value();
-//   m_stats.m_min = m_min.get_value();
-//   m_stats.m_max = m_max.get_value();
-
-//   m_stats.m_normValue = m_normValue.get_value();
-//   m_stats.m_bgNoise = m_bgNoise.get_value();
-// }
-
 Glib::PropertyProxy<long> Stats::propertyTotalPixels() {
   return m_totalPixels.get_proxy();
 }

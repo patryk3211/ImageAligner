@@ -35,10 +35,6 @@ public:
 
   modified_signal_type signalModified();
 
-  // Use this method to store modified data back
-  // in the underlying IO sequence entry.
-  // void writeBack();
-
   Glib::PropertyProxy<long> propertyTotalPixels();
   Glib::PropertyProxy<long> propertyGoodPixels();
   Glib::PropertyProxy<double> propertyMean();
