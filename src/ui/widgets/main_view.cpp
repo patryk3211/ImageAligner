@@ -8,6 +8,8 @@
 #include <spdlog/spdlog.h>
 
 using namespace UI;
+using namespace Obj;
+using namespace IO;
 
 MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder)
   : ObjectBase("MainView")
@@ -59,12 +61,12 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   m_offset[1] = 0;
   m_scale = get_width();
 
-  auto& refSeqImg = m_state->m_sequence->image(m_state->m_sequence->referenceImage());
-  auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg.m_fileIndex);
+  auto refSeqImg = m_state->m_sequence->image(m_state->m_sequence->getReferenceImageIndex());
+  auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg->getFileIndex());
   m_pixelSize = 1.0 / refParams.width();
 
   int x = 0, y = 0;
-  for(int i = 0; i < m_state->m_sequence->imageCount(); ++i) {
+  for(int i = 0; i < m_state->m_sequence->getImageCount(); ++i) {
     auto imageView = std::make_shared<ViewImage>(*this, m_sequenceView->getImage(i));
     imageView->imageObject()->signalRedraw().connect(sigc::mem_fun(*this, &MainView::queue_draw));
     m_images.push_back(imageView);
@@ -75,7 +77,7 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
 
 std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
   for(auto& view : m_images) {
-    if(view->imageObject()->getIndex() == seqIndex)
+    if(view->imageObject()->getSequenceIndex() == seqIndex)
       return view;
   }
   return nullptr;
@@ -93,7 +95,7 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   // Extract selected image object
   auto iter = m_images.begin();
   while(iter != m_images.end()) {
-    if((*iter)->imageObject()->getIndex() == selectedIndex)
+    if((*iter)->imageObject()->getSequenceIndex() == selectedIndex)
       break;
     ++iter;
   }
@@ -123,12 +125,17 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   auto minAdj = m_minLevelBtn->get_adjustment();
   auto maxAdj = m_maxLevelBtn->get_adjustment();
   minAdj->set_lower(0);
-  minAdj->set_upper(imgObj->getTypeMax());
+  minAdj->set_upper(m_state->m_imageFile.maxTypeValue());
   maxAdj->set_lower(0);
-  maxAdj->set_upper(imgObj->getTypeMax());
+  maxAdj->set_upper(m_state->m_imageFile.maxTypeValue());
 
-  m_levelBindings[0] = Glib::Binding::bind_property(imgObj->propertyLevelMin(), m_minLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
-  m_levelBindings[1] = Glib::Binding::bind_property(imgObj->propertyLevelMax(), m_maxLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+  auto stats = imgObj->getStats(0);
+  if(!stats) {
+    imgObj->calculateStats(m_state->m_imageFile);
+    stats = imgObj->getStats(0);
+  }
+  m_levelBindings[0] = Glib::Binding::bind_property(stats->propertyMin(), m_minLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+  m_levelBindings[1] = Glib::Binding::bind_property(stats->propertyMax(), m_maxLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
 
   queue_draw();
 }
@@ -144,7 +151,7 @@ void MainView::realize() {
 #define FLAG_DRAW_UNSELECTED 2
 
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
-  spdlog::trace("Main view redraw start");
+  spdlog::trace("(MainView) Redraw start");
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -191,7 +198,7 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     spdlog::error("GL Error {}", errCode);
   }
 
-  spdlog::trace("Main view redraw end");
+  spdlog::trace("(MainView) Redraw end");
   return true;
 }
 
@@ -248,6 +255,10 @@ double MainView::pixelSize() const {
   return m_pixelSize;
 }
 
+std::shared_ptr<UI::State> MainView::state() {
+  return m_state;
+}
+
 ViewImage::ViewImage(MainView& area, const Glib::RefPtr<Image>& image)
   : m_imageObject(image) {
   m_vertices = area.createBuffer();
@@ -259,11 +270,12 @@ ViewImage::ViewImage(MainView& area, const Glib::RefPtr<Image>& image)
   m_vao->attribPointer(0, 2, GL_FLOAT, false, 4 * sizeof(float), 0);
   m_vao->attribPointer(1, 2, GL_FLOAT, false, 4 * sizeof(float), 2 * sizeof(float));
 
-  loadTexture(image->getProvider(), image->getIndex());
+  loadTexture(area.state()->m_imageFile, image->getSequenceIndex());
 
   m_vao->unbind();
 
   m_pixelSize = area.pixelSize();
+  m_maxValue = area.state()->m_imageFile.maxTypeValue();
 }
 
 // 2 floats for position, 2 for UV
@@ -293,7 +305,7 @@ void ViewImage::makeVertices(float scaleX, float scaleY) {
   m_vertices->store(sizeof(buffer), buffer);
 }
 
-void ViewImage::loadTexture(Img::ImageProvider& image, int index) {
+void ViewImage::loadTexture(ImageProvider& image, int index) {
   auto params = image.getImageParameters(index);
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
@@ -304,7 +316,7 @@ void ViewImage::loadTexture(Img::ImageProvider& image, int index) {
   params.setDimension(0, -1, -1, scale);
   params.setDimension(1, -1, -1, scale);
 
-  if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
+  if(params.type() != DataType::SHORT && params.type() != DataType::USHORT) {
     spdlog::error("Not a short type 16 bit image");
     return;
   }
@@ -321,25 +333,32 @@ Glib::RefPtr<Image> ViewImage::imageObject() {
 void ViewImage::render(GL::Program& program) {
   float matrix[9];
   if(!m_imageObject->isReference()) {
-    m_imageObject->homography().read(matrix);
+    auto reg = m_imageObject->getRegistration();
+    if(!reg) {
+      // Identity matrix
+      HomographyMatrix::identity(matrix);
+    } else {
+      reg->matrix().read(matrix);
+    }
 
     // Scale translations by pixel size
     matrix[2] *=  m_pixelSize;
     matrix[5] *= -m_pixelSize;
   } else {
     // Identity matrix
-    memset(matrix, 0, sizeof(matrix));
-
-    matrix[0] = 1;
-    matrix[4] = 1;
-    matrix[8] = 1;
+    HomographyMatrix::identity(matrix);
   }
 
   program.uniformMat3fv("u_Transform", 1, true, matrix);
 
-  float min = m_imageObject->getScaledMinLevel();
-  float max = m_imageObject->getScaledMaxLevel();
-  program.uniform2f("u_Levels", min, max);
+  auto stats = m_imageObject->getStats(0);
+  if(stats) {
+    float min = stats->getMin() / m_maxValue;
+    float max = stats->getMax() / m_maxValue;
+    program.uniform2f("u_Levels", min, max);
+  } else {
+    program.uniform2f("u_Levels", 0, 1);
+  }
 
   glActiveTexture(GL_TEXTURE0);
   m_texture->bind();

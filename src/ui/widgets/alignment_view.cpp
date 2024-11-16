@@ -1,10 +1,14 @@
 #include "ui/widgets/alignment_view.hpp"
+#include "objects/matrix.hpp"
+#include "objects/registration.hpp"
 #include "ui/state.hpp"
 
 #include <GL/gl.h>
 #include <spdlog/spdlog.h>
 
 using namespace UI;
+using namespace Obj;
+using namespace IO;
 
 AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder)
   : GLAreaPlus(cobject, builder) {
@@ -35,7 +39,7 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
 
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
-  m_imageRegistration = 0;
+  // m_imageRegistration = 0;
   m_refAspect = 0;
 
   viewTypeChanged();
@@ -63,7 +67,7 @@ void AlignmentView::realize() {
 }
 
 bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
-  spdlog::trace("Alignment view render start");
+  spdlog::trace("(AlignmentView) Render start");
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -85,18 +89,14 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
 
   float matrix[9];
   if(!m_alignImage->isReference()) {
-    m_alignImage->homography().read(matrix);
+    m_alignImage->getRegistration()->matrix().read(matrix);;
 
     // Scale translations
     matrix[2] *= -m_pixelSize;
     matrix[5] *=  m_pixelSize * m_refAspect;
   } else {
     // Identity matrix
-    memset(matrix, 0, sizeof(matrix));
-
-    matrix[0] = 1;
-    matrix[4] = 1;
-    matrix[8] = 1;
+    HomographyMatrix::identity(matrix);
   }
   m_program->uniformMat3fv("u_Homography", 1, true, matrix);
 
@@ -105,12 +105,15 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   float viewParam = static_cast<float>(m_viewParamBtn->get_value());
   m_program->uniform1f("u_DisplayParam", viewParam);
 
-  m_program->uniform2f("u_RefLevels", m_referenceImage->getScaledMinLevel(), m_referenceImage->getScaledMaxLevel());
-  m_program->uniform2f("u_AlignLevels", m_alignImage->getScaledMinLevel(), m_alignImage->getScaledMaxLevel());
+  auto refStats = m_referenceImage->getStats(0);
+  auto aliStats = m_alignImage->getStats(0);
+  double typeMax = m_state->m_imageFile.maxTypeValue();
+  m_program->uniform2f("u_RefLevels", refStats->getMin() / typeMax, refStats->getMax() / typeMax);
+  m_program->uniform2f("u_AlignLevels", aliStats->getMin() / typeMax, aliStats->getMax() / typeMax);
 
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-  spdlog::trace("Alignment view render end");
+  spdlog::trace("(AlignmentView) Render end");
   return true;
 }
 
@@ -123,7 +126,12 @@ void AlignmentView::referenceChanged() {
   auto index = static_cast<int>(m_refImgBtn->get_value());
   m_referenceImage = m_sequenceView->getImage(index);
 
-  auto params = m_referenceImage->getProvider().getImageParameters(m_referenceImage->getSequenceImage().m_fileIndex);
+  if(!m_referenceImage->getStats(0)) {
+    // Guarantee that stats are available for drawing
+    m_referenceImage->calculateStats(m_state->m_imageFile);
+  }
+
+  auto params = m_state->m_imageFile.getImageParameters(m_referenceImage->getFileIndex());
 
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
@@ -131,7 +139,7 @@ void AlignmentView::referenceChanged() {
   m_pixelSize = 1.0 / params.width();
   m_refAspect = (float)params.width() / params.height();
 
-  if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
+  if(params.type() != DataType::SHORT && params.type() != DataType::USHORT) {
     spdlog::error("Not a short type 16 bit image");
     return;
   }
@@ -171,18 +179,27 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
 
   spdlog::trace("(AlignmentView) Sequence view selection changed");
 
+  // Remove old bindings
   if(m_xBinding) {
     m_xBinding->unbind();
     m_xBinding = nullptr;
   }
-
   if(m_yBinding) {
     m_yBinding->unbind();
     m_yBinding = nullptr;
   }
+  if(!m_alignSigConn.empty())
+    m_alignSigConn.disconnect();
 
+  // Get new image
   m_alignImage = m_sequenceView->getSelected();
-  auto params = m_alignImage->getProvider().getImageParameters(m_alignImage->getSequenceImage().m_fileIndex);
+
+  if(!m_alignImage->getStats(0))
+    m_alignImage->calculateStats(m_state->m_imageFile);
+  if(!m_alignImage->getRegistration())
+    m_alignImage->setRegistration(Registration::create());
+
+  // Create new bindings to fields
   if(!m_alignImage->isReference()) {
     m_xOffsetBtn->set_editable(true);
     m_yOffsetBtn->set_editable(true);
@@ -190,7 +207,6 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
     m_xBinding = Glib::Binding::bind_property(m_alignImage->propertyXOffset(), m_xOffsetBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
     m_yBinding = Glib::Binding::bind_property(m_alignImage->propertyYOffset(), m_yOffsetBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
   } else {
-    m_imageRegistration = 0;
     m_xOffsetBtn->set_value(0);
     m_yOffsetBtn->set_value(0);
 
@@ -198,14 +214,14 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
     m_yOffsetBtn->set_editable(false);
   }
 
-  if(!m_alignSigConn.empty())
-    m_alignSigConn.disconnect();
+  // New redraw signal
   m_alignSigConn = m_alignImage->signalRedraw().connect(sigc::mem_fun(*this, &AlignmentView::queue_draw));
 
+  auto params = m_state->m_imageFile.getImageParameters(m_alignImage->getFileIndex());
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
 
-  if(params.type() != Img::DataType::SHORT && params.type() != Img::DataType::USHORT) {
+  if(params.type() != DataType::SHORT && params.type() != DataType::USHORT) {
     spdlog::error("Not a short type 16 bit image");
     return;
   }

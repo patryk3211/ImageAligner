@@ -5,6 +5,7 @@
 #include <format>
 
 using namespace UI;
+using namespace Obj;
 
 SequenceView::SequenceView() : Glib::ObjectBase("SequenceView") {
   /* Dummy constructor for type registration */
@@ -50,21 +51,22 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
   m_model->remove_all();
 
   // Populate with new sequence
-  for(int i = 0; i < state->m_sequence->imageCount(); ++i) {
+  for(int i = 0; i < state->m_sequence->getImageCount(); ++i) {
+    m_model->append(state->m_sequence->image(i));
     // auto& img = state->m_sequence->image(i);
-    m_model->append(Image::create(i, *state->m_sequence, state->m_imageFile));
+    // m_model->append(Image::create(i, *state->m_sequence, state->m_imageFile));
   }
 
   // Set reference image index
   auto adj = m_refImageSelector->get_adjustment();
   adj->set_lower(0);
   adj->set_step_increment(1);
-  adj->set_upper(state->m_sequence->imageCount() - 1);
-  adj->set_value(state->m_sequence->referenceImage());
+  adj->set_upper(state->m_sequence->getImageCount() - 1);
+  adj->set_value(state->m_sequence->getReferenceImageIndex());
 
   auto listView = get_children()[1];
   auto rows = listView->get_children();
-  rows[state->m_sequence->referenceImage()]->add_css_class("refimg");
+  rows[state->m_sequence->getReferenceImageIndex()]->add_css_class("refimg");
 
   // Select first image
   get_model()->select_item(0, true);
@@ -110,7 +112,7 @@ void SequenceView::idColBind(const ListItem& item) {
   auto& itemRef = dynamic_cast<Image&>(*item->get_item());
   auto& label = dynamic_cast<Gtk::Label&>(*item->get_child());
 
-  Glib::Binding::bind_property(itemRef.propertyIndex(), label.property_label(), Glib::Binding::Flags::SYNC_CREATE, [](const int& index) -> std::optional<Glib::ustring> {
+  Glib::Binding::bind_property(itemRef.propertySequenceIndex(), label.property_label(), Glib::Binding::Flags::SYNC_CREATE, [](const int& index) -> std::optional<Glib::ustring> {
     return std::to_string(index);
   });
 }

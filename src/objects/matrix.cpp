@@ -1,6 +1,6 @@
-#include "ui/objects/matrix.hpp"
+#include "objects/matrix.hpp"
 
-using namespace UI;
+using namespace Obj;
 
 HomographyMatrix::HomographyMatrix()
   : ObjectBase("HomographyMatrix")

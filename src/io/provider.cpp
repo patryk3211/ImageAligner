@@ -1,8 +1,8 @@
-#include "img/provider.hpp"
+#include "io/provider.hpp"
 
 #include <spdlog/spdlog.h>
 
-using namespace Img;
+using namespace IO;
 
 size_t DataType::dataSize(const EnumType& type) {
   switch(type) {
@@ -148,7 +148,7 @@ bool DataParameters::operator==(const DataParameters& other) const {
   return true;
 }
 
-size_t DataParamHash::operator()(const Img::DataParameters& obj) const {
+size_t DataParamHash::operator()(const DataParameters& obj) const {
   std::hash<long> hasher;
 
   size_t h = obj.m_type + obj.m_dimCount * 100 + obj.m_index * 1000;
@@ -259,6 +259,10 @@ std::shared_ptr<uint8_t[]> CachedImageProvider::getPixels(const DataParameters& 
     return data;
   }
   return iter->second;
+}
+
+double CachedImageProvider::maxTypeValue() {
+  return m_provider->maxTypeValue();
 }
 
 void CachedImageProvider::cleanupCache() {

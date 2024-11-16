@@ -7,9 +7,14 @@ enable_testing()
 
 # Sources
 set(COMMON_SRC
-  src/img/sequence.cpp
-  src/img/fits.cpp
-  src/img/provider.cpp
+  src/io/sequence.cpp
+  src/io/fits.cpp
+  src/io/provider.cpp
+
+  src/objects/stats.cpp
+  src/objects/matrix.cpp
+  src/objects/registration.cpp
+  src/objects/image.cpp
 )
 
 set(EXEC_SOURCE
@@ -18,9 +23,6 @@ set(EXEC_SOURCE
   src/ui/app.cpp
   src/ui/window.cpp
   src/ui/state.cpp
-
-  src/ui/objects/image.cpp
-  src/ui/objects/matrix.cpp
 
   src/ui/widgets/util.cpp
   src/ui/widgets/sequence_list.cpp
@@ -50,25 +52,32 @@ find_package(spdlog REQUIRED)
 # Common library (used for testing functionality)
 add_library(common ${COMMON_SRC})
 
-target_include_directories(common PUBLIC include)
-target_link_libraries(common PUBLIC cfitsio spdlog::spdlog)
+target_include_directories(common PUBLIC
+  include
+  ${GTKMM_INCLUDE_DIRS}
+)
+target_link_directories(common PUBLIC
+  ${GTKMM_LIBRARY_DIRS}
+)
+target_link_libraries(common PUBLIC
+  cfitsio
+  spdlog::spdlog
+  PkgConfig::GTK4
+  ${GTKMM_LIBRARIES}
+)
 
 # Executable target
 add_executable(aligner ${EXEC_SOURCE})
 
 target_include_directories(aligner PRIVATE
-  ${GTKMM_INCLUDE_DIRS}
   ${Adwaita_INCLUDE_DIRS}
   ${OPENGL_INCLUDE_DIRS}
 )
 
 target_link_directories(aligner PRIVATE
-  ${GTKMM_LIBRARY_DIRS}
   ${Adwaita_LIBRARY_DIRS}
 )
 target_link_libraries(aligner PRIVATE
-  PkgConfig::GTK4
-  ${GTKMM_LIBRARIES}
   ${Adwaita_LIBRARIES}
   ${OPENGL_LIBRARIES}
 )

@@ -2,8 +2,8 @@
 
 #include <filesystem>
 
-#include "img/sequence.hpp"
-#include "img/fits.hpp"
+#include "io/sequence.hpp"
+#include "io/fits.hpp"
 
 namespace UI {
 class Window;
@@ -12,10 +12,10 @@ class State {
   std::filesystem::path m_sequenceFilePath;
 
 public:
-  std::shared_ptr<Img::Sequence> m_sequence;
-  Img::Fits m_imageFile;
+  std::shared_ptr<IO::Sequence> m_sequence;
+  IO::Fits m_imageFile;
 
-  State(const std::filesystem::path& sequenceFilePath, const std::shared_ptr<Img::Sequence>& sequence, Img::Fits&& image);
+  State(const std::filesystem::path& sequenceFilePath, const std::shared_ptr<IO::Sequence>& sequence, IO::Fits&& image);
   ~State() = default;
 
   void saveSequence();

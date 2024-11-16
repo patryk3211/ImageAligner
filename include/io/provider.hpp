@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <list>
 
-namespace Img {
+namespace IO {
 
 struct DataType {
   enum EnumType {
@@ -73,7 +73,7 @@ public:
 };
 
 struct DataParamHash {
-  size_t operator()(const Img::DataParameters& obj) const;
+  size_t operator()(const IO::DataParameters& obj) const;
 };
 
 class ImageProvider {
@@ -89,6 +89,8 @@ public:
 
   virtual DataParameters getImageParameters(int index) = 0;
   virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) = 0;
+
+  virtual double maxTypeValue() = 0;
 };
 
 class CachedImageProvider : public ImageProvider {
@@ -105,9 +107,10 @@ public:
   virtual DataParameters getImageParameters(int index) override;
   virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) override;
 
+  virtual double maxTypeValue() override;
 private:
   void cleanupCache();
 };
 
-}
+} // namespace IO
 

@@ -6,13 +6,12 @@
 #include <spdlog/spdlog.h>
 
 using namespace UI;
-using namespace Img;
+using namespace IO;
 
 State::State(const std::filesystem::path& sequenceFilePath, const std::shared_ptr<Sequence>& sequence, Fits&& image)
   : m_sequenceFilePath(sequenceFilePath)
   , m_sequence(sequence)
   , m_imageFile(std::move(image)) {
-
 }
 
 std::shared_ptr<State> State::fromSequenceFile(const std::filesystem::path& sequence_path) {
@@ -33,6 +32,7 @@ void State::saveSequence() {
     spdlog::error("Failed to open stream for sequence save");
     return;
   }
+  m_sequence->prepareWrite(m_imageFile);
   m_sequence->writeStream(stream);
 }
 

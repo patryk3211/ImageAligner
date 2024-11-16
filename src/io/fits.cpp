@@ -1,4 +1,4 @@
-#include "img/fits.hpp"
+#include "io/fits.hpp"
 
 #include <cassert>
 
@@ -6,7 +6,7 @@
 
 #define GUARD() ErrorGuard _guard(*this)
 
-using namespace Img;
+using namespace IO;
 
 static int fitsDataType(const DataType::EnumType& type) {
   switch(type) {
@@ -207,5 +207,28 @@ std::shared_ptr<uint8_t[]> Fits::getPixels(const DataParameters& params) {
     return nullptr;
 
   return data;
+}
+
+double Fits::maxTypeValue() {
+  GUARD();
+  // Right now this code is assuming that every image
+  // has the same data type and the same type max value.
+  // This should be fine but I'm not 100% sure.
+  int equivType;
+  fits_get_img_equivtype(m_fileptr, &equivType, &m_status);
+
+  switch(equivType) {
+    case BYTE_IMG: return (1 << 8) - 1;
+    case SHORT_IMG: return (1 << 15) - 1;
+    case USHORT_IMG: return (1 << 16) - 1;
+    case LONG_IMG: return INT_MAX;
+    case LONGLONG_IMG: return LONG_MAX;
+    // TODO: These two are almost certainly wrong
+    case FLOAT_IMG: return 1.0;
+    case DOUBLE_IMG: return 1.0;
+    default:
+      spdlog::error("Unknown equivType received from FITSIO: {}", equivType);
+      assert(false);
+  }
 }
 

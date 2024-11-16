@@ -1,8 +1,7 @@
-#include "seq_util.hpp"
+#include "io/sequence.hpp"
 
+#include <glibmm/init.h>
 #include <sstream>
-
-#include <iostream>
 
 static const char *INPUT1 =
 "S 'test_sequence' 0 3 2 0 1 4 0 0\n"
@@ -17,8 +16,10 @@ static const char *INPUT1 =
 "M2-0 12144384 -1 -999999 -999999 -999999 -999999 -999999 -999999 -999999 -999999 1006 1603 65535 -999999\n";
 
 int main() {
+  Glib::init();
+
   std::istringstream istr(INPUT1);
-  auto seqPtr = Img::Sequence::readStream(istr);
+  auto seqPtr = IO::Sequence::readStream(istr);
 
   std::ostringstream ostr;
   seqPtr->writeStream(ostr);

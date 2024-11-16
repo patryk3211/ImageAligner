@@ -1,13 +1,13 @@
 #pragma once
 
 #include <gtkmm.h>
-#include "ui/objects/image.hpp"
+#include "objects/image.hpp"
 
 namespace UI {
 class State;
 
 class SequenceView : public Gtk::ColumnView {
-  Glib::RefPtr<Gio::ListStore<Image>> m_model;
+  Glib::RefPtr<Gio::ListStore<Obj::Image>> m_model;
 
   using Factory = Glib::RefPtr<Gtk::SignalListItemFactory>;
   using ListItem = Glib::RefPtr<Gtk::ListItem>;
@@ -27,12 +27,12 @@ public:
 
   void connectState(const std::shared_ptr<UI::State>& state);
 
-  Glib::RefPtr<Gio::ListStore<Image>>& model();
+  Glib::RefPtr<Gio::ListStore<Obj::Image>>& model();
 
   uint getSelectedIndex();
-  Glib::RefPtr<Image> getSelected();
+  Glib::RefPtr<Obj::Image> getSelected();
 
-  Glib::RefPtr<Image> getImage(int index);
+  Glib::RefPtr<Obj::Image> getImage(int index);
 
   void prevImage();
   void nextImage();

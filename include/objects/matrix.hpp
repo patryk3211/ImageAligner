@@ -2,7 +2,7 @@
 
 #include <gtkmm.h>
 
-namespace UI {
+namespace Obj {
 
 class HomographyMatrix : public Glib::Object {
   // Property name = h[row][column]
@@ -40,6 +40,14 @@ public:
   void set(int i, double val);
   void set(int col, int row, double val);
 
+  template<typename T>
+  static void identity(T *data) {
+    memset(data, 0, sizeof(T) * 9);
+    data[0] = 1;
+    data[4] = 1;
+    data[8] = 1;
+  }
+
   // Changing ordering to COLUMN_MAJOR effectively transposes the matrix
   template<typename T>
   void read(T *data, OrderEnum ordering = ROW_MAJOR) const {
@@ -72,4 +80,4 @@ public:
   }
 };
 
-}
+} // namespace Obj

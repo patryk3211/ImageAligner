@@ -1,11 +1,11 @@
 #pragma once
 
-#include "img/provider.hpp"
+#include "io/provider.hpp"
 
 #include <filesystem>
 #include <fitsio.h>
 
-namespace Img {
+namespace IO {
 
 class Fits : public ImageProvider {
   fitsfile *m_fileptr;
@@ -36,7 +36,8 @@ public:
 
   virtual DataParameters getImageParameters(int index) override;
   virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) override;
+  virtual double maxTypeValue() override;
 };
 
-}
+} // namespace IO
 

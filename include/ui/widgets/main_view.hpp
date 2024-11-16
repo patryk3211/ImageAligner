@@ -1,10 +1,10 @@
 #pragma once
 
-#include "ui/objects/image.hpp"
+#include "objects/image.hpp"
 #include "ui/widgets/gl/vao.hpp"
 #include "ui/widgets/gl_area_plus.hpp"
 #include "ui/widgets/sequence_list.hpp"
-#include "img/provider.hpp"
+#include "io/provider.hpp"
 #include <functional>
 #include <gtkmm.h>
 
@@ -13,23 +13,24 @@ class State;
 class MainView;
 
 class ViewImage {
-  Glib::RefPtr<Image> m_imageObject;
+  Glib::RefPtr<Obj::Image> m_imageObject;
   std::shared_ptr<GL::Buffer> m_vertices;
   std::shared_ptr<GL::Texture> m_texture;
   std::shared_ptr<GL::VAO> m_vao;
 
   double m_pixelSize;
+  double m_maxValue;
 
 public:
-  ViewImage(MainView& area, const Glib::RefPtr<Image>& image);
+  ViewImage(MainView& area, const Glib::RefPtr<Obj::Image>& image);
   ~ViewImage() = default;
 
 private:
   void makeVertices(float scaleX, float scaleY);
-  void loadTexture(Img::ImageProvider& image, int index);
+  void loadTexture(IO::ImageProvider& image, int index);
 
 public:
-  Glib::RefPtr<Image> imageObject();
+  Glib::RefPtr<Obj::Image> imageObject();
   void render(GL::Program& program);
 };
 
@@ -71,6 +72,7 @@ public:
   std::shared_ptr<ViewImage> getView(int seqIndex);
 
   double pixelSize() const;
+  std::shared_ptr<UI::State> state();
 
 protected:
   virtual void realize();

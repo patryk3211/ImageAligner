@@ -1,108 +1,110 @@
 #pragma once
 
-#include "img/sequence.hpp"
+#include "io/sequence.hpp"
+#include "objects/image.hpp"
 
-static int check_header(const Img::Sequence& seq, const std::string& name, int startImage,
+using namespace IO;
+using namespace Obj;
+
+static int check_header(const Sequence& seq, const std::string& name, int startImage,
                  int imageCount, int selectedCount, int fixedLength, int referenceImage,
                  int version, int variableSize, int fzFlag) {
-  if(seq.name() != name)
+  if(seq.getSequenceName().raw() != name)
     return 0;
-  if(seq.startImage() != startImage)
+  if(seq.getFileIndexFirst() != startImage)
     return 0;
-  if(seq.imageCount() != imageCount)
+  if(seq.getImageCount() != imageCount)
     return 0;
-  if(seq.selectedCount() != selectedCount)
+  if(seq.getSelectedCount() != selectedCount)
     return 0;
-  if(seq.fixedLength() != fixedLength)
+  if(seq.getFileIndexFixedLength() != fixedLength)
     return 0;
-  if(seq.referenceImage() != referenceImage)
+  if(seq.getReferenceImageIndex() != referenceImage)
     return 0;
-  if(seq.version() != version)
+  if(seq.getVersion() != version)
     return 0;
-  if(seq.variableSize() != variableSize)
+  if(seq.getVariableSizeImages() != variableSize)
     return 0;
-  if(seq.fzFlag() != fzFlag)
-    return 0;
-  return 1;
-}
-
-static int check_image(const Img::SequenceImage& img, int index, bool selected) {
-  if(img.m_fileIndex != index)
-    return 0;
-  if((!!img.m_included) != selected)
+  if(seq.getFzFlag() != fzFlag)
     return 0;
   return 1;
 }
 
-static int check_stats(const Img::ImageStats& stats, long pixels, long goodPixels, double mean,
+static int check_image(const Image& img, int index, bool selected) {
+  if(img.getFileIndex() != index)
+    return 0;
+  if(img.getIncluded() != selected)
+    return 0;
+  return 1;
+}
+
+static int check_stats(const Stats& stats, long pixels, long goodPixels, double mean,
                        double median, double sigma, double avgDev, double mad, double sqrtBWMV, double location,
                        double scale, double min, double max, double normValue, double bgNoise) {
-  if(stats.m_totalPixels != pixels)
+  if(stats.getTotalPixels() != pixels)
     return 0;
-  if(stats.m_goodPixels != goodPixels)
+  if(stats.getGoodPixels() != goodPixels)
     return 0;
-  if(stats.m_mean != mean)
+  if(stats.getMean() != mean)
     return 0;
-  if(stats.m_median != median)
+  if(stats.getMedian() != median)
     return 0;
-  if(stats.m_sigma != sigma)
+  if(stats.getSigma() != sigma)
     return 0;
-  if(stats.m_avgDev != avgDev)
+  if(stats.getAvgDev() != avgDev)
     return 0;
-  if(stats.m_mad != mad)
+  if(stats.getMad() != mad)
     return 0;
-  if(stats.m_sqrtBWMV != sqrtBWMV)
+  if(stats.getSqrtBWMV() != sqrtBWMV)
     return 0;
-  if(stats.m_location != location)
+  if(stats.getLocation() != location)
     return 0;
-  if(stats.m_scale != scale)
+  if(stats.getScale() != scale)
     return 0;
-  if(stats.m_min != min)
+  if(stats.getMin() != min)
     return 0;
-  if(stats.m_max != max)
+  if(stats.getMax() != max)
     return 0;
-  if(stats.m_normValue != normValue)
+  if(stats.getNormValue() != normValue)
     return 0;
-  if(stats.m_bgNoise != bgNoise)
+  if(stats.getBgNoise() != bgNoise)
     return 0;
   return 1;
 }
 
-static int check_registration(const Img::ImageRegistration& reg, int layer, float fwhm, float wfwhm, float roundness, double quality,
+static int check_registration(const Registration& reg, float fwhm, float wfwhm, float roundness, double quality,
                               float backgroundLvl, int numberOfStarts, double h0, double h1, double h2, double h3, double h4,
                               double h5, double h6, double h7, double h8) {
-  if(reg.m_layer != layer)
+  if(reg.getFWHM() != fwhm)
     return 0;
-  if(reg.m_FWHM != fwhm)
+  if(reg.getWeightedFWHM() != wfwhm)
     return 0;
-  if(reg.m_weightedFWHM != wfwhm)
+  if(reg.getRoundness() != roundness)
     return 0;
-  if(reg.m_roundness != roundness)
+  if(reg.getQuality() != quality)
     return 0;
-  if(reg.m_quality != quality)
+  if(reg.getBackgroundLevel() != backgroundLvl)
     return 0;
-  if(reg.m_backgroundLevel != backgroundLvl)
-    return 0;
-  if(reg.m_numberOfStars != numberOfStarts)
+  if(reg.getNumberOfStars() != numberOfStarts)
     return 0;
 
-  if(reg.m_homographyMatrix[0] != h0)
+  if(reg.matrix().get(0) != h0)
     return 0;
-  if(reg.m_homographyMatrix[1] != h1)
+  if(reg.matrix().get(1) != h1)
     return 0;
-  if(reg.m_homographyMatrix[2] != h2)
+  if(reg.matrix().get(2) != h2)
     return 0;
-  if(reg.m_homographyMatrix[3] != h3)
+  if(reg.matrix().get(3) != h3)
     return 0;
-  if(reg.m_homographyMatrix[4] != h4)
+  if(reg.matrix().get(4) != h4)
     return 0;
-  if(reg.m_homographyMatrix[5] != h5)
+  if(reg.matrix().get(5) != h5)
     return 0;
-  if(reg.m_homographyMatrix[6] != h6)
+  if(reg.matrix().get(6) != h6)
     return 0;
-  if(reg.m_homographyMatrix[7] != h7)
+  if(reg.matrix().get(7) != h7)
     return 0;
-  if(reg.m_homographyMatrix[8] != h8)
+  if(reg.matrix().get(8) != h8)
     return 0;
 
   return 1;
