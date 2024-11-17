@@ -19,8 +19,8 @@ Texture::~Texture() {
 }
 
 void Texture::destroy() {
-  prepare_context();
   if(m_id != NULL_ID) {
+    Object::destroy();
     glDeleteTextures(1, &m_id);
     m_id = NULL_ID;
   }

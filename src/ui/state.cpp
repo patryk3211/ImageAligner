@@ -34,5 +34,7 @@ void State::saveSequence() {
   }
   m_sequence->prepareWrite(m_imageFile);
   m_sequence->writeStream(stream);
+
+  m_sequence->markClean();
 }
 

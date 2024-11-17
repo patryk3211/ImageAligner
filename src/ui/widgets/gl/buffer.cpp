@@ -14,8 +14,8 @@ Buffer::~Buffer() {
 }
 
 void Buffer::destroy() {
-  prepare_context();
   if(m_id != NULL_ID) {
+    Object::destroy();
     glDeleteBuffers(1, &m_id);
     m_id = NULL_ID;
   }

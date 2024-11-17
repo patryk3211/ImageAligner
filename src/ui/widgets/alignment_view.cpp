@@ -39,6 +39,11 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
 
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
+  m_viewSection[0] = 0;
+  m_viewSection[1] = 0;
+  m_viewSection[2] = 1;
+  m_viewSection[3] = 1;
+
   // m_imageRegistration = 0;
   m_refAspect = 0;
 

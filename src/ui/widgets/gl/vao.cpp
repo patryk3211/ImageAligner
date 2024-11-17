@@ -28,6 +28,10 @@ void VAO::attribPointer(int index, int count, int type, bool normalized, int str
 }
 
 void VAO::destroy() {
-  glDeleteVertexArrays(1, &m_id);
+  if(m_id != NULL_ID) {
+    Object::destroy();
+    glDeleteVertexArrays(1, &m_id);
+    m_id = NULL_ID;
+  }
 }
 

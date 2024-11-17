@@ -20,7 +20,7 @@ class Image : public Glib::Object {
   std::vector<Glib::RefPtr<Stats>> m_stats;
   Glib::RefPtr<Registration> m_registration;
 
-  Glib::RefPtr<IO::Sequence> m_sequence;
+  std::weak_ptr<IO::Sequence> m_sequence;
 
   sigc::connection m_connRegistration;
   std::vector<sigc::connection> m_connStats;

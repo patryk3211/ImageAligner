@@ -19,7 +19,7 @@ public:
   Object(const Glib::RefPtr<Gdk::GLContext>& ctx);
   virtual ~Object() = default;
 
-  virtual void destroy() = 0;
+  virtual void destroy();
 };
 
 } // namespace UI::GL

@@ -34,6 +34,7 @@
         spdlog
 
         gdb
+        valgrind
         # gtk3 cfitsio gsl exiv2 gnuplot opencv fftwFloat librtprocess wcslib
         # libconfig libraw libtiff libpng libjpeg libheif ffms ffmpeg json-glib
         # libjxl libxisf libgit2 curl
@@ -45,6 +46,8 @@
         (lib.removeSuffix "\n" (builtins.readFile "${llvm.clang}/nix-support/libc-cflags"))
         (lib.removeSuffix "\n" (builtins.readFile "${llvm.clang}/nix-support/libcxx-cxxflags"))
       ];
+
+      GLIB_VALGRIND_SUPP = "${pkgs.glib.dev}/share/glib-2.0/valgrind/glib.supp";
 
       shellHook = ''
         export CXXFLAGS+=$NIX_CFLAGS_COMPILE

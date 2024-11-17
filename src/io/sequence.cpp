@@ -25,7 +25,12 @@ Sequence::Sequence()
   , m_fzFlag(*this, "fz-flag")
   , m_layerCount(*this, "layer-count")
   , m_sequenceType(*this, "sequence-type", SequenceType::MULTI_FITS)
-  , m_registrationLayer(*this, "registration-layer") {
+  , m_registrationLayer(*this, "registration-layer")
+  , m_dirty(*this, "dirty", false) {
+}
+
+Sequence::~Sequence() {
+  spdlog::trace("(Sequence) dtor entry");
 }
 
 Glib::RefPtr<Sequence> Sequence::create() {
@@ -47,7 +52,6 @@ Glib::RefPtr<Sequence> Sequence::readSequence(const std::filesystem::path& filep
 
 Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
   Glib::RefPtr<Sequence> sequence;
-  // Sequence sequence;
 
   char line[512];
   const char* scanfmt = 0;
@@ -80,16 +84,11 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
         if(sscanf(line + 2, scanfmt, seqName,
                   &start, &count, &selCount, &fixed,
                   &reference, &version, &variable, &fzFlag) < 6) {
-                  // start, &sequence.m_imageCount,
-                  // &sequence.m_selectedCount, &sequence.m_fixedLength,
-                  // &sequence.m_referenceImage, &sequence.m_version,
-                  // &sequence.m_variableSize, &sequence.m_flag) < 6) {
           spdlog::error("Sequence header error");
           return nullptr;
         }
 
-        sequence->m_sequenceName.set_value(seqName); // = std::string(seqName);
-        // sequence.m_images.resize(sequence.m_imageCount);
+        sequence->m_sequenceName.set_value(seqName);
         sequence->m_fileIndexFirst.set_value(start);
         sequence->m_imageCount.set_value(count);
         sequence->m_selectedCount.set_value(selCount);
@@ -116,20 +115,6 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
         }
         break;
       case 'I': {
-    //     if(sequence.m_version <= 3) {
-    //       SequenceImage& imgRef = sequence.m_images[imageIndex++];
-				// 	int tokenCount = sscanf(line + 2, "%d %d %lg %lg %lg %lg %lg %lg %lg %lg %lg %lg",
-    //                          &imgRef.m_fileIndex, &imgRef.m_included,
-    //                          &imgRef.m_mean, &imgRef.m_median, &imgRef.m_sigma,
-    //                          &imgRef.m_avgDev, &imgRef.m_mad, &imgRef.m_sqrtBWMV,
-    //                          &imgRef.m_location, &imgRef.m_scale, &imgRef.m_min,
-    //                          &imgRef.m_max);
-				// 	if(tokenCount != 12 || tokenCount != 2) {
-    //         std::cout << "Sequence file format error" << std::endl;
-    //         return nullptr;
-				// 	}
-				// } else {
-        // SequenceImage& imgRef = sequence.m_images[imageIndex++];
         int fileIndex, included, width, height;
         int tokenCount = sscanf(line + 2, "%d %d %d,%d",
                            &fileIndex, &included, &width, &height);
@@ -182,10 +167,6 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
           spdlog::error("Stats defined for non-existant image");
           return nullptr;
         }
-        // SequenceImage& ref = sequence.m_images[image];
-        // if(ref.m_stats.empty())
-        //   ref.m_stats.resize(sequence.m_layerCount);
-        // ImageStats& stats = ref.m_stats[layer];
         long totalPixels, goodPixels;
         double mean, median, sigma, avgDev, mad, sqrtBWMV, location, scale, min, max, normValue, bgNoise;
         int tokenCount = sscanf(line + 4 + consumed, "%ld %ld %lg %lg %lg %lg %lg %lg %lg %lg %lg %lg %lg %lg",
@@ -245,9 +226,6 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
           }
         }
 
-        // ImageRegistration reg;
-        // reg.m_layer = layer;
-       
         float FWHM, weightedFWHM, roundness, backgroundLevel;
         double quality;
         int numberOfStars;
@@ -275,9 +253,6 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
 
         auto img = sequence->m_images[regIndex++];
         img->setRegistration(reg);
-        // img
-        // reg.hom
-        // sequence.m_images[regIndex++].m_registration = reg;
         break;
       }
       case 0:
@@ -290,8 +265,26 @@ Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {
   }
 
   sequence->validate();
+  sequence->markClean();
   return sequence;
-  // return std::make_shared<Sequence>(sequence);
+}
+
+void Sequence::markDirty() {
+  if(!m_dirty.get_value())
+    m_dirty.set_value(true);
+}
+
+void Sequence::markClean() {
+  if(m_dirty.get_value())
+    m_dirty.set_value(false);
+}
+
+bool Sequence::isDirty() {
+  return m_dirty.get_value();
+}
+
+Glib::PropertyProxy_ReadOnly<bool> Sequence::propertyDirty() {
+  return const_cast<const Glib::Property<bool>&>(m_dirty).get_proxy();
 }
 
 void Sequence::validate() {

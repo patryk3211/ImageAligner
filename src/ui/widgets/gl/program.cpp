@@ -107,8 +107,8 @@ Program::~Program() {
 }
 
 void Program::destroy() {
-  prepare_context();
   if(m_id != NULL_ID) {
+    Object::destroy();
     glDeleteProgram(m_id);
     m_id = NULL_ID;
   }

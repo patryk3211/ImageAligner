@@ -31,9 +31,11 @@ class Sequence : public Glib::Object {
 
   std::vector<Glib::RefPtr<Obj::Image>> m_images;
 
+  Glib::Property<bool> m_dirty;
+
 public:
   Sequence();
-  virtual ~Sequence() = default;
+  virtual ~Sequence();
 
   static Glib::RefPtr<Sequence> create();
 
@@ -41,6 +43,11 @@ public:
   void prepareWrite(IO::ImageProvider& provider);
 
   void writeStream(std::ostream& stream);
+
+  void markDirty();
+  void markClean();
+  bool isDirty();
+  Glib::PropertyProxy_ReadOnly<bool> propertyDirty();
 
   Glib::PropertyProxy<Glib::ustring> propertySequenceName();
   Glib::PropertyProxy<int> propertyFileIndexFirst();

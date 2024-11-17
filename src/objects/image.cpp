@@ -76,6 +76,7 @@ Glib::RefPtr<Stats> Image::getStats(int layer) {
 
 void Image::calculateStats(ImageProvider& provider) {
   auto params = provider.getImageParameters(m_fileIndex.get_value());
+  bool changed = false;
 
   for(int i = 0; i < m_stats.size(); ++i) {
     if(m_stats[i])
@@ -101,7 +102,11 @@ void Image::calculateStats(ImageProvider& provider) {
     
     m_stats[i] = stats;
     m_connStats[i] = stats->signalModified().connect(sigc::mem_fun(*this, &Image::notifyRedraw));
+    changed = true;
   }
+
+  if(changed)
+    notifyRedraw();
 }
 
 Glib::PropertyProxy_ReadOnly<int> Image::propertySequenceIndex() {
@@ -165,7 +170,7 @@ Image::redraw_signal_type Image::signalRedraw() {
 }
 
 bool Image::isReference() {
-  return m_sequence->getReferenceImageIndex() == m_sequenceIndex.get_value();
+  return m_sequence.lock()->getReferenceImageIndex() == m_sequenceIndex.get_value();
 }
 
 void Image::notifyRedraw() {
@@ -173,6 +178,9 @@ void Image::notifyRedraw() {
     m_redrawSignal.emit();
     m_notified = true;
   }
+
+  // Any change to a sequence's object marks it as dirty.
+  m_sequence.lock()->markDirty();
 }
 
 void Image::clearRedrawFlag() {
