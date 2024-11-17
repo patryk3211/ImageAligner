@@ -13,13 +13,15 @@ flat out vec2 p_BorderWidth;
 uniform vec4 u_Selection;
 uniform mat4 u_View;
 uniform float u_Scale;
+uniform float u_Width;
 
-const float BORDER_WIDTH = 0.01;
+// const float BORDER_WIDTH = 0.01;
+#define BORDER_WIDTH 0.01
 
 void main() {
   gl_Position = u_View * vec4((u_Selection.xy + c_Position[gl_VertexID] * u_Selection.zw), 0.0, 1.0);
 
-  p_Pos = (c_Position[gl_VertexID] * 2.0 - 1.0);
-  p_BorderWidth = 1.0 - BORDER_WIDTH / abs(u_Selection.zw) / u_Scale;
+  p_Pos = c_Position[gl_VertexID]; //(c_Position[gl_VertexID] * 2.0 - 1.0);
+  p_BorderWidth = 1.0 - (4.0 / u_Width) / abs(u_Selection.zw) / u_Scale;
 }
 

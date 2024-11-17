@@ -39,10 +39,10 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
 
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
-  m_viewSection[0] = 0;
-  m_viewSection[1] = 0;
-  m_viewSection[2] = 1;
-  m_viewSection[3] = 1;
+  // m_viewSection[0] = 0;
+  // m_viewSection[1] = 0;
+  // m_viewSection[2] = 1;
+  // m_viewSection[3] = 1;
 
   // m_imageRegistration = 0;
   m_refAspect = 0;
@@ -77,8 +77,10 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  if(!m_referenceImage || !m_alignImage)
+  if(!m_referenceImage || !m_alignImage) {
+    spdlog::trace("(AlignmentView) Render quick end");
     return true;
+  }
 
   m_program->use();
 
@@ -90,7 +92,15 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_program->uniform1i("u_RefTexture", 0);
   m_program->uniform1i("u_AlignTexture", 1);
 
-  m_program->uniform4f("u_ViewSelection", m_viewSection);
+  if(m_viewSection) {
+    m_program->uniform4f("u_ViewSelection",
+                         m_viewSection->m_x,
+                         m_viewSection->m_y * m_refAspect,
+                         m_viewSection->m_width,
+                         m_viewSection->m_height * m_refAspect);
+  } else {
+    m_program->uniform4f("u_ViewSelection", 0, 0, 1, 1);
+  }
 
   float matrix[9];
   if(!m_alignImage->isReference()) {
@@ -238,15 +248,11 @@ void AlignmentView::sequenceViewSelectionChanged(uint position, uint nitems) {
 }
 
 void AlignmentView::pickArea() {
-  m_mainView->requestSelection([this](float x, float y, float width, float height) {
-    m_viewSection[0] = x;
-    m_viewSection[1] = y * m_refAspect;
-    m_viewSection[2] = width;
-    m_viewSection[3] = height * m_refAspect;
+  m_mainView->requestSelection([this](const std::shared_ptr<Selection>& selection) {
+    m_viewSection = selection;
+    m_aspectFrame->set_ratio(selection->m_width / selection->m_height);
 
-    m_aspectFrame->set_ratio(width / height);
-
-    spdlog::info("Selected ({}, {}), ({}, {})", x, y, width, height);
+    spdlog::info("Selected ({}, {}), ({}, {})", selection->m_x, selection->m_y, selection->m_width, selection->m_height);
     queue_draw();
   });
 }

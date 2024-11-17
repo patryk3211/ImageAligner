@@ -28,7 +28,8 @@ class AlignmentView : public GLAreaPlus {
   Gtk::SpinButton *m_yOffsetBtn;
 
   float m_refAspect;
-  float m_viewSection[4];
+  std::shared_ptr<Selection> m_viewSection;
+  // float m_viewSection[4];
   double m_pixelSize;
 
   // IO::ImageRegistration* m_imageRegistration;

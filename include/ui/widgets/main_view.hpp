@@ -34,6 +34,20 @@ public:
   void render(GL::Program& program);
 };
 
+class Selection {
+  MainView& m_view;
+
+public:
+  float m_x;
+  float m_y;
+  float m_width;
+  float m_height;
+
+public:
+  Selection(MainView& view, float x, float y, float width, float height);
+  ~Selection();
+};
+
 class MainView : public GLAreaPlus {
   std::shared_ptr<GL::Program> m_imgProgram;
   std::shared_ptr<GL::Program> m_selectProgram;
@@ -47,15 +61,23 @@ class MainView : public GLAreaPlus {
   Gtk::Scale *m_minLevelScale;
   Gtk::Scale *m_maxLevelScale;
 
+  float m_viewMatrix[16];
+
   std::list<std::shared_ptr<ViewImage>> m_images;
 
   float m_offset[2];
   float m_scale;
   float m_savedOffset[2];
 
-  float m_selection[4];
+// public:
+  using selection_callback = std::function<void(const std::shared_ptr<Selection>&)>;
+
+// private:
+
+  float m_currentSelection[4];
   bool m_makeSelection;
-  std::optional<std::function<void(float, float, float, float)>> m_selectCallback;
+  std::optional<selection_callback> m_selectCallback;
+  std::list<Selection*> m_selections;
 
   double m_pixelSize;
 
@@ -67,7 +89,7 @@ public:
 
   void connectState(const std::shared_ptr<UI::State>& state);
 
-  void requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect = 0);
+  void requestSelection(const selection_callback& callback, float forceAspect = 0);
 
   std::shared_ptr<ViewImage> getView(int seqIndex);
 
@@ -78,12 +100,16 @@ protected:
   virtual void realize();
   virtual bool render(const Glib::RefPtr<Gdk::GLContext>& context);
 
+  void renderSelection(float x, float y, float width, float height);
+
   void dragBegin(double startX, double startY);
   void dragUpdate(double offsetX, double offsetY);
   void dragEnd(double endX, double endY);
   bool scroll(double x, double y);
 
   void sequenceViewSelectionChanged(uint position, uint nitems);
+
+  friend Selection;
 };
 
 }

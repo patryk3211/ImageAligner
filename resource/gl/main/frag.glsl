@@ -22,7 +22,12 @@ void main() {
   vec3 color = applyLevels(texCol.xxx, u_Levels.x, u_Levels.y);
 
   if((u_Flags & FLAG_DRAW_UNSELECTED) != 0) {
-    color *= vec3(1.0, 0.0, 0.0);
+    // Cross the image out
+    vec2 centerPos = p_UV * 2.0 - 1.0;
+    vec2 absPos = abs(centerPos);
+    float coordDiff = abs(absPos.x - absPos.y);
+    float strength = clamp((0.05 - coordDiff) * 100.0, 0.0, 1.0);
+    color = mix(color, vec3(1.0, 0.0, 0.0), strength);
   }
 
   if((u_Flags & FLAG_DRAW_BORDER) != 0) {

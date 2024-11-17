@@ -48,7 +48,7 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
 
   m_pixelSize = 1;
 
-  memset(m_selection, 0, sizeof(m_selection));
+  memset(m_currentSelection, 0, sizeof(m_currentSelection));
   m_makeSelection = false;
 }
 
@@ -83,8 +83,8 @@ std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
   return nullptr;
 }
 
-void MainView::requestSelection(const std::function<void(float, float, float, float)>& callback, float forceAspect) {
-  memset(m_selection, 0, sizeof(m_selection));
+void MainView::requestSelection(const selection_callback& callback, float forceAspect) {
+  memset(m_currentSelection, 0, sizeof(m_currentSelection));
   m_selectCallback = callback;
   m_makeSelection = true;
 }
@@ -159,17 +159,27 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   // Activate image render program
   m_imgProgram->use();
 
+  // Recalculate view/projection matrix
   float aspect = (float)get_width() / get_height();
   float scaleFactor = m_scale / get_width();
-  const float viewMatrix[] = {
-    scaleFactor, 0.0, 0.0, 0.0,
-    0.0, -scaleFactor * aspect, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    m_offset[0] * m_scale, -m_offset[1] * m_scale, 0.0, 1.0,
-  };
-  m_imgProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
+  memset(m_viewMatrix, 0, sizeof(m_viewMatrix));
+  m_viewMatrix[0] = scaleFactor;
+  m_viewMatrix[5] = -scaleFactor * aspect;
+  m_viewMatrix[10] = 1.0;
+  m_viewMatrix[12] = m_offset[0] * m_scale;
+  m_viewMatrix[13] = -m_offset[1] * m_scale;
+  m_viewMatrix[15] = 1.0;
+  // {
+  //   scaleFactor, 0.0, 0.0, 0.0,
+  //   0.0, -scaleFactor * aspect, 0.0, 0.0,
+  //   0.0, 0.0, 1.0, 0.0,
+  //   m_offset[0] * m_scale, -m_offset[1] * m_scale, 0.0, 1.0,
+  // };
+
+  m_imgProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
   m_imgProgram->uniform1i("u_Texture", 0);
 
+  // Render all images
   bool hideUnselected = m_hideUnselected->get_active();
   for(auto iter = m_images.rbegin(); iter != m_images.rend(); ++iter) {
     auto& image = *iter;
@@ -185,12 +195,21 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     image->render(*m_imgProgram);
   }
 
-  // Render selection
+  // Render selections
   m_selectProgram->use();
-  m_selectProgram->uniformMat4fv("u_View", 1, false, viewMatrix);
-  m_selectProgram->uniform4f("u_Selection", m_selection);
-  m_selectProgram->uniform1f("u_Scale", scaleFactor);
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  m_selectProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+  m_selectProgram->uniform1f("u_Scale", m_scale / get_width());
+  m_selectProgram->uniform1f("u_Width", get_width());
+
+  if(m_makeSelection) {
+    // Render the selection being currently made
+    renderSelection(m_currentSelection[0], m_currentSelection[1], m_currentSelection[2], m_currentSelection[3]);
+  }
+
+  // Render all other active selections
+  for(auto& sel : m_selections) {
+    renderSelection(sel->m_x, sel->m_y, sel->m_width, sel->m_height);
+  }
 
   // Print all errors that occurred
   GLenum errCode;
@@ -202,14 +221,34 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   return true;
 }
 
+Selection::Selection(MainView& view, float x, float y, float width, float height)
+  : m_view(view)
+  , m_x(x)
+  , m_y(y)
+  , m_width(width)
+  , m_height(height) {
+  m_view.m_selections.push_back(this);
+}
+
+Selection::~Selection() {
+  m_view.m_selections.remove(this);
+}
+
+void MainView::renderSelection(float x, float y, float width, float height) {
+  m_selectProgram->uniform4f("u_Selection", x, y, width, height);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 void MainView::dragBegin(double startX, double startY) {
+  spdlog::trace("(MainView) Drag begin");
+
   if(!m_makeSelection) {
     m_savedOffset[0] = m_offset[0];
     m_savedOffset[1] = m_offset[1];
   } else {
     // These translations are absolutely insane
-    m_selection[0] = (startX * 2 - (float)get_width()) / m_scale - m_offset[0] * get_width();
-    m_selection[1] = (startY * 2 - (float)get_height()) / m_scale - m_offset[1] * get_height();
+    m_currentSelection[0] = (startX * 2 - (float)get_width()) / m_scale - m_offset[0] * get_width();
+    m_currentSelection[1] = (startY * 2 - (float)get_height()) / m_scale - m_offset[1] * get_height();
   }
 }
 
@@ -218,26 +257,30 @@ void MainView::dragUpdate(double offsetX, double offsetY) {
     m_offset[0] = m_savedOffset[0] + offsetX / get_width() * 2 / m_scale;
     m_offset[1] = m_savedOffset[1] + offsetY / get_height() * 2 / m_scale;
   } else {
-    m_selection[2] = offsetX * 2 / m_scale;
-    m_selection[3] = offsetY * 2 / m_scale;
+    m_currentSelection[2] = offsetX * 2 / m_scale;
+    m_currentSelection[3] = offsetY * 2 / m_scale;
   }
   queue_draw();
 }
 
 void MainView::dragEnd(double endX, double endY) {
-  if(m_selection[2] < 0) {
-    m_selection[0] += m_selection[2];
-    m_selection[2] = -m_selection[2];
+  spdlog::trace("(MainView) Drag end");
+
+  if(m_currentSelection[2] < 0) {
+    m_currentSelection[0] += m_currentSelection[2];
+    m_currentSelection[2] = -m_currentSelection[2];
   }
-  if(m_selection[3] < 0) {
-    m_selection[1] += m_selection[3];
-    m_selection[3] = -m_selection[3];
+  if(m_currentSelection[3] < 0) {
+    m_currentSelection[1] += m_currentSelection[3];
+    m_currentSelection[3] = -m_currentSelection[3];
   }
   if(m_selectCallback) {
-    (*m_selectCallback)(m_selection[0], m_selection[1], m_selection[2], m_selection[3]);
+    auto selection = std::make_shared<Selection>(*this, m_currentSelection[0], m_currentSelection[1], m_currentSelection[2], m_currentSelection[3]);
+    (*m_selectCallback)(selection);
     m_selectCallback = std::nullopt;
   }
   m_makeSelection = false;
+  queue_draw();
 }
 
 bool MainView::scroll(double x, double y) {
