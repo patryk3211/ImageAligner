@@ -40,6 +40,19 @@ SequenceView::SequenceView(BaseObjectType *cobject, const Glib::RefPtr<Gtk::Buil
   set_model(Gtk::SingleSelection::create(m_model));
 
   m_refImageSelector = builder->get_widget<Gtk::SpinButton>("ref_image_spin_btn");
+  m_refImageSelector->signal_value_changed().connect(sigc::mem_fun(*this, &SequenceView::referenceChanged));
+
+  m_lastRefIndex = -1;
+}
+
+void SequenceView::referenceChanged() {
+  auto listView = get_children()[1];
+  auto rows = listView->get_children();
+  if(m_lastRefIndex >= 0) {
+    rows[m_lastRefIndex]->remove_css_class("refimg");
+  }
+  m_lastRefIndex = static_cast<int>(m_refImageSelector->get_value());
+  rows[m_lastRefIndex]->add_css_class("refimg");
 }
 
 Glib::RefPtr<Gio::ListStore<Image>>& SequenceView::model() {
@@ -51,10 +64,9 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
   m_model->remove_all();
 
   // Populate with new sequence
+  // TODO: Turn IO::Sequence into a valid ListModel
   for(int i = 0; i < state->m_sequence->getImageCount(); ++i) {
     m_model->append(state->m_sequence->image(i));
-    // auto& img = state->m_sequence->image(i);
-    // m_model->append(Image::create(i, *state->m_sequence, state->m_imageFile));
   }
 
   // Set reference image index
@@ -62,11 +74,10 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
   adj->set_lower(0);
   adj->set_step_increment(1);
   adj->set_upper(state->m_sequence->getImageCount() - 1);
-  adj->set_value(state->m_sequence->getReferenceImageIndex());
 
-  auto listView = get_children()[1];
-  auto rows = listView->get_children();
-  rows[state->m_sequence->getReferenceImageIndex()]->add_css_class("refimg");
+  Glib::Binding::bind_property(state->m_sequence->propertyReferenceImageIndex(), m_refImageSelector->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
+  m_lastRefIndex = -1;
+  referenceChanged();
 
   // Select first image
   get_model()->select_item(0, true);

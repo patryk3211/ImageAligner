@@ -12,9 +12,6 @@ using namespace IO;
 
 AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder)
   : GLAreaPlus(cobject, builder) {
-  m_refImgBtn = builder->get_widget<Gtk::SpinButton>("ref_image_spin_btn");
-  m_refImgBtn->signal_value_changed().connect(sigc::mem_fun(*this, &AlignmentView::referenceChanged));
-
   m_sequenceView = Gtk::Builder::get_widget_derived<SequenceView>(builder, "sequence_view");
   auto selectionModel = m_sequenceView->get_model();
   selectionModel->signal_selection_changed().connect(sigc::mem_fun(*this, &AlignmentView::sequenceViewSelectionChanged));
@@ -39,12 +36,6 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
 
   m_aspectFrame = dynamic_cast<Gtk::AspectFrame*>(get_parent());
 
-  // m_viewSection[0] = 0;
-  // m_viewSection[1] = 0;
-  // m_viewSection[2] = 1;
-  // m_viewSection[3] = 1;
-
-  // m_imageRegistration = 0;
   m_refAspect = 0;
 
   viewTypeChanged();
@@ -52,6 +43,8 @@ AlignmentView::AlignmentView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Bu
 
 void AlignmentView::connectState(const std::shared_ptr<UI::State>& state) {
   m_state = state;
+
+  m_state->m_sequence->propertyReferenceImageIndex().signal_changed().connect(sigc::mem_fun(*this, &AlignmentView::referenceChanged));
 
   // Reload textures
   referenceChanged();
@@ -138,9 +131,7 @@ void AlignmentView::referenceChanged() {
 
   spdlog::trace("(AlignmentView) Reference changed");
 
-  auto index = static_cast<int>(m_refImgBtn->get_value());
-  m_referenceImage = m_sequenceView->getImage(index);
-
+  m_referenceImage = m_sequenceView->getImage(m_state->m_sequence->getReferenceImageIndex());
   if(!m_referenceImage->getStats(0)) {
     // Guarantee that stats are available for drawing
     m_referenceImage->calculateStats(m_state->m_imageFile);

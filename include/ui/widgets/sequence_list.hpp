@@ -17,6 +17,7 @@ class SequenceView : public Gtk::ColumnView {
   Factory m_xOffsetFactory;
   Factory m_yOffsetFactory;
 
+  int m_lastRefIndex;
   Gtk::SpinButton *m_refImageSelector;
 
 public:
@@ -38,6 +39,8 @@ public:
   void nextImage();
 
 private:
+  void referenceChanged();
+
   static void labelColSetup(const ListItem& item);
   static void checkboxColSetup(const ListItem& item);
   static void idColBind(const ListItem& item);

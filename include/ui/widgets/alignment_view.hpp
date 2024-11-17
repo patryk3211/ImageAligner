@@ -20,7 +20,6 @@ class AlignmentView : public GLAreaPlus {
   MainView *m_mainView;
   Gtk::AspectFrame *m_aspectFrame;
 
-  Gtk::SpinButton *m_refImgBtn;
   Gtk::SpinButton *m_viewTypeBtn;
   Gtk::SpinButton *m_viewParamBtn;
 
@@ -29,11 +28,8 @@ class AlignmentView : public GLAreaPlus {
 
   float m_refAspect;
   std::shared_ptr<Selection> m_viewSection;
-  // float m_viewSection[4];
   double m_pixelSize;
 
-  // IO::ImageRegistration* m_imageRegistration;
-  // Glib::RefPtr<Obj::Registration> m_registration;
   Glib::RefPtr<Obj::Image> m_referenceImage;
   Glib::RefPtr<Obj::Image> m_alignImage;
 
