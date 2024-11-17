@@ -8,6 +8,8 @@
 #include <iostream>
 #include <format>
 
+#include <opencv2/core/mat.hpp>
+
 #include <spdlog/spdlog.h>
 
 using namespace IO;
@@ -27,6 +29,8 @@ Sequence::Sequence()
   , m_sequenceType(*this, "sequence-type", SequenceType::MULTI_FITS)
   , m_registrationLayer(*this, "registration-layer")
   , m_dirty(*this, "dirty", false) {
+  m_oldReference = -1;
+  m_referenceImageIndex.get_proxy().signal_changed().connect(sigc::mem_fun(*this, &Sequence::referenceChanged));
 }
 
 Sequence::~Sequence() {
@@ -48,6 +52,47 @@ Glib::RefPtr<Sequence> Sequence::readSequence(const std::filesystem::path& filep
   }
 
   return readStream(file);
+}
+
+void Sequence::referenceChanged() {
+  if(m_oldReference < 0) {
+    m_oldReference = m_referenceImageIndex.get_value();
+    return;
+  }
+
+  auto oldRef = image(m_oldReference);
+  m_oldReference = m_referenceImageIndex.get_value();
+
+  // Make sure that oldRef has a valid registration with an identity matrix.
+  if(!oldRef->getRegistration()) {
+    oldRef->setRegistration(Obj::Registration::create());
+  } else {
+    auto reg = oldRef->getRegistration();
+    reg->matrix().reset();
+  }
+
+  auto newRef = image(m_referenceImageIndex.get_value());
+  if(!newRef->getRegistration()) {
+    // New reference doesn't have a registration (so it is effectively an identity matrix),
+    // so there is no need to do any recalculation
+    return;
+  }
+
+  auto newRefMat = newRef->getRegistration()->matrix().read();
+  auto newRefInverse = newRefMat.inv();
+
+  for(auto& img : m_images) {
+    if(!img->getRegistration()) {
+      // Skip images without valid registration
+      continue;
+    }
+
+    auto reg = img->getRegistration();
+    auto regMat = reg->matrix().read();
+    // TODO: This works for translation only matrices but will have to be checked for more complex ones.
+    auto newMat = newRefInverse * regMat;
+    reg->matrix().write(newMat);
+  }
 }
 
 Glib::RefPtr<Sequence> Sequence::readStream(std::istream& stream) {

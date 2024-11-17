@@ -24,6 +24,27 @@ HomographyMatrix::HomographyMatrix()
   m_accessArray[8] = &m_h22;
 }
 
+void HomographyMatrix::reset() {
+  for(int i = 0; i < 9; ++i)
+    set(i, 0);
+  set(0, 1);
+  set(4, 1);
+  set(8, 1);
+}
+
+cv::Mat HomographyMatrix::read() const {
+  cv::Mat mat;
+  mat.create(3, 3, CV_64F);
+  for(int i = 0; i < 9; ++i)
+    mat.at<double>(i) = get(i);
+  return mat;
+}
+
+void HomographyMatrix::write(const cv::Mat& matrix) {
+  for(int i = 0; i < 9; ++i)
+    set(i, matrix.at<double>(i));
+}
+
 Glib::PropertyProxy<double> HomographyMatrix::property(int i) {
   return m_accessArray[i]->get_proxy();
 }

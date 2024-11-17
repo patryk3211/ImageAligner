@@ -48,6 +48,7 @@ pkg_check_modules(Adwaita libadwaita-1)
 
 find_package(OpenGL REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # Common library (used for testing functionality)
 add_library(common ${COMMON_SRC})
@@ -55,6 +56,7 @@ add_library(common ${COMMON_SRC})
 target_include_directories(common PUBLIC
   include
   ${GTKMM_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 target_link_directories(common PUBLIC
   ${GTKMM_LIBRARY_DIRS}
@@ -64,6 +66,7 @@ target_link_libraries(common PUBLIC
   spdlog::spdlog
   PkgConfig::GTK4
   ${GTKMM_LIBRARIES}
+  ${OpenCV_LIBS}
 )
 
 # Executable target

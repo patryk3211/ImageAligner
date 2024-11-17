@@ -32,6 +32,7 @@ class Sequence : public Glib::Object {
   std::vector<Glib::RefPtr<Obj::Image>> m_images;
 
   Glib::Property<bool> m_dirty;
+  int m_oldReference;
 
 public:
   Sequence();
@@ -74,6 +75,8 @@ public:
   int getLayerCount() const;
   SequenceType getSequenceType() const;
   int getRegistrationLayer() const;
+
+  void referenceChanged();
 
   Glib::RefPtr<Obj::Image> image(int index) const;
 

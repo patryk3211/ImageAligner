@@ -32,13 +32,14 @@
         cfitsio
         libGL
         spdlog
+        opencv
 
         gdb
         valgrind
+
         # gtk3 cfitsio gsl exiv2 gnuplot opencv fftwFloat librtprocess wcslib
         # libconfig libraw libtiff libpng libjpeg libheif ffms ffmpeg json-glib
         # libjxl libxisf libgit2 curl
-
       ];
 
       CXXFLAGS = builtins.concatStringsSep " " [

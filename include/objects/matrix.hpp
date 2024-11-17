@@ -2,6 +2,8 @@
 
 #include <gtkmm.h>
 
+#include <opencv2/core/mat.hpp>
+
 namespace Obj {
 
 class HomographyMatrix : public Glib::Object {
@@ -33,6 +35,8 @@ public:
   Glib::PropertyProxy<double> property(int col, int row);
   Glib::PropertyProxy_ReadOnly<double> property(int i) const;
   Glib::PropertyProxy_ReadOnly<double> property(int col, int row) const;
+
+  void reset();
 
   double get(int i) const;
   double get(int col, int row) const;
@@ -78,6 +82,9 @@ public:
       }
     }
   }
+
+  cv::Mat read() const;
+  void write(const cv::Mat& matrix);
 };
 
 } // namespace Obj
