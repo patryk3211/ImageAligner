@@ -1,5 +1,6 @@
 #include "io/provider.hpp"
 
+#include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 using namespace IO;
@@ -224,6 +225,59 @@ ImageProvider::ImageProvider()
 
 int ImageProvider::imageCount() {
   return m_imageCount;
+}
+
+std::shared_ptr<uint8_t[]> ImageProvider::getPixels(const DataParameters& params) {
+  if(!params)
+    return nullptr;
+
+  int dimCount = params.dimCount();
+  long start[dimCount], end[dimCount], inc[dimCount];
+  size_t pixelCount = 1;
+  for(int i = 0; i < dimCount; ++i) {
+    size_t length = (params.end()[i] - params.start()[i] + 1) / params.inc()[i];
+    pixelCount *= length;
+  }
+
+  std::shared_ptr<uint8_t[]> data(new uint8_t[pixelCount * DataType::dataSize(params.type())]);
+  if(readPixels(params, data.get()))
+    return data;
+
+  return nullptr;
+}
+
+cv::Mat ImageProvider::getImageMatrix(int index) {
+  auto params = getImageParameters(index);
+  // Read only the first layer
+  params.setDimension(2, 1, 1, 1);
+
+  int matType;
+  switch(params.type()) {
+    case IO::DataType::BYTE:
+      matType = CV_8SC1;
+      break;
+    case IO::DataType::UBYTE:
+      matType = CV_8UC1;
+      break;
+    case IO::DataType::SHORT:
+      matType = CV_16SC1;
+      break;
+    case IO::DataType::USHORT:
+      matType = CV_16UC1;
+      break;
+    default:
+      spdlog::error("Unknown params type: {}", (int)params.type());
+      assert(false);
+  }
+
+  cv::Mat mat;
+  mat.create(params.height(), params.width(), matType);
+
+  if(readPixels(params, mat.ptr()))
+    return mat;
+
+  spdlog::error("Reading image to a matrix failed");
+  return cv::Mat();
 }
 
 CachedImageProvider::CachedImageProvider(ImageProvider* provider, size_t maxCachedEntries)

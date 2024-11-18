@@ -178,16 +178,47 @@ DataParameters Fits::getImageParameters(int index) {
   }
 }
 
-std::shared_ptr<uint8_t[]> Fits::getPixels(const DataParameters& params) {
+// std::shared_ptr<uint8_t[]> Fits::getPixels(const DataParameters& params) {
+//   if(!params)
+//     return nullptr;
+
+//   GUARD();
+
+//   select(params.index() + 1);
+//   int dimCount = imageDimensionCount();
+//   if(dimCount != params.dimCount())
+//     return nullptr;
+
+//   long start[dimCount], end[dimCount], inc[dimCount];
+//   size_t pixelCount = 1;
+//   for(int i = 0; i < dimCount; ++i) {
+//     start[i] = params.start()[i];
+//     end[i] = params.end()[i];
+//     inc[i] = params.inc()[i];
+
+//     size_t length = (end[i] - start[i] + 1) / inc[i];
+//     pixelCount *= length;
+//   }
+
+//   std::shared_ptr<uint8_t[]> data(new uint8_t[pixelCount * DataType::dataSize(params.type())]);
+//   fits_read_subset(m_fileptr, fitsDataType(params.type()), start, end, inc, nullptr, data.get(), nullptr, &m_status);
+
+//   if(m_status != 0)
+//     return nullptr;
+
+//   return data;
+// }
+
+bool Fits::readPixels(const DataParameters& params, void *ptr) {
   if(!params)
-    return nullptr;
+    return false;
 
   GUARD();
 
   select(params.index() + 1);
   int dimCount = imageDimensionCount();
   if(dimCount != params.dimCount())
-    return nullptr;
+    return false;
 
   long start[dimCount], end[dimCount], inc[dimCount];
   size_t pixelCount = 1;
@@ -200,13 +231,8 @@ std::shared_ptr<uint8_t[]> Fits::getPixels(const DataParameters& params) {
     pixelCount *= length;
   }
 
-  std::shared_ptr<uint8_t[]> data(new uint8_t[pixelCount * DataType::dataSize(params.type())]);
-  fits_read_subset(m_fileptr, fitsDataType(params.type()), start, end, inc, nullptr, data.get(), nullptr, &m_status);
-
-  if(m_status != 0)
-    return nullptr;
-
-  return data;
+  fits_read_subset(m_fileptr, fitsDataType(params.type()), start, end, inc, nullptr, ptr, nullptr, &m_status);
+  return m_status == 0;
 }
 
 double Fits::maxTypeValue() {

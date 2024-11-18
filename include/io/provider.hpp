@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <list>
 
+#include <opencv2/core/mat.hpp>
+
 namespace IO {
 
 struct DataType {
@@ -87,10 +89,13 @@ public:
 
   int imageCount();
 
-  virtual DataParameters getImageParameters(int index) = 0;
-  virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) = 0;
+  cv::Mat getImageMatrix(int index);
+
+  virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params);
 
   virtual double maxTypeValue() = 0;
+  virtual DataParameters getImageParameters(int index) = 0;
+  virtual bool readPixels(const DataParameters& params, void *ptr) = 0;
 };
 
 class CachedImageProvider : public ImageProvider {

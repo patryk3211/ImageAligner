@@ -22,7 +22,8 @@ vec3 applyLevels(vec3 input, float m, float M) {
 
 void main() {
   vec2 refUV = u_ViewSelection.xy + p_UV * u_ViewSelection.zw;
-  vec2 aliUV = (u_Homography * vec3(refUV, 1.0)).xy;
+  vec3 projectedUV = u_Homography * vec3(refUV, 1.0);
+  vec2 aliUV = projectedUV.xy / projectedUV.z; //(u_Homography * vec3(refUV, 1.0));
 
   vec3 colRef;
   // TODO: Use border clamping for this

@@ -15,6 +15,8 @@ set(COMMON_SRC
   src/objects/matrix.cpp
   src/objects/registration.cpp
   src/objects/image.cpp
+
+  src/cv/context.cpp
 )
 
 set(EXEC_SOURCE

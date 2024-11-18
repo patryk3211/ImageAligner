@@ -10,7 +10,7 @@
 
     buildSrc = ''
       #!/usr/bin/env bash
-      cmake --build $(realpath build)
+      cmake --build $(realpath build) --target aligner
     '';
 
     reconfSrc = ''

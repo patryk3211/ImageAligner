@@ -66,7 +66,7 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   m_pixelSize = 1.0 / refParams.width();
 
   int x = 0, y = 0;
-  for(int i = 0; i < m_state->m_sequence->getImageCount(); ++i) {
+  for(int i = 0; i < m_state->m_sequence->getImageCount() && i < 2; ++i) {
     auto imageView = std::make_shared<ViewImage>(*this, m_sequenceView->getImage(i));
     imageView->imageObject()->signalRedraw().connect(sigc::mem_fun(*this, &MainView::queue_draw));
     m_images.push_back(imageView);

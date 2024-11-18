@@ -13,6 +13,8 @@ const float BORDER_WIDTH = 0.01;
 
 void main() {
   vec3 imgPos = u_Transform * vec3(a_Position, 1.0);
+  imgPos.xy /= imgPos.z;
+
   gl_Position = u_View * vec4(imgPos.xy, 0.0, 1.0);
 
   p_UV = a_UV;

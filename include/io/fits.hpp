@@ -35,7 +35,8 @@ public:
   void imageSize(int dimCount, long *dimensions);
 
   virtual DataParameters getImageParameters(int index) override;
-  virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) override;
+  // virtual std::shared_ptr<uint8_t[]> getPixels(const DataParameters& params) override;
+  virtual bool readPixels(const DataParameters& params, void *ptr) override;
   virtual double maxTypeValue() override;
 };
 

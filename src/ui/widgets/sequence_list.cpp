@@ -65,7 +65,7 @@ void SequenceView::connectState(const std::shared_ptr<UI::State>& state) {
 
   // Populate with new sequence
   // TODO: Turn IO::Sequence into a valid ListModel
-  for(int i = 0; i < state->m_sequence->getImageCount(); ++i) {
+  for(int i = 0; i < state->m_sequence->getImageCount() && i < 2; ++i) {
     m_model->append(state->m_sequence->image(i));
   }
 

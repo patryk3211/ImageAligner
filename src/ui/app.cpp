@@ -4,6 +4,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "cv/context.hpp"
+
 using namespace UI;
 
 App::App()
@@ -49,6 +51,10 @@ void App::openFileFinish(Glib::RefPtr<Gio::AsyncResult>& result) {
     if(m_state) {
       m_window->setState(m_state);
       m_saveAction->set_enabled(true);
+
+      auto ctx = new OpenCV::Context(m_state->m_imageFile);
+      ctx->addReference(m_state->m_sequence->image(0));
+      ctx->matchFeatures(m_state->m_sequence->image(1));
     } else {
       m_window->setState(nullptr);
       m_saveAction->set_enabled(false);
