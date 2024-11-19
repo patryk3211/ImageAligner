@@ -1,6 +1,7 @@
 #version 150 core
 
-in vec2 p_UV;
+in vec2 p_RefUV;
+in vec2 p_AlignUV;
 
 out vec4 o_FragColor;
 
@@ -10,9 +11,6 @@ uniform sampler2D u_AlignTexture;
 uniform int u_DisplayType;
 uniform float u_DisplayParam;
 
-uniform vec4 u_ViewSelection;
-uniform mat3 u_Homography;
-
 uniform vec2 u_RefLevels;
 uniform vec2 u_AlignLevels;
 
@@ -21,20 +19,16 @@ vec3 applyLevels(vec3 input, float m, float M) {
 }
 
 void main() {
-  vec2 refUV = u_ViewSelection.xy + p_UV * u_ViewSelection.zw;
-  vec3 projectedUV = u_Homography * vec3(refUV, 1.0);
-  vec2 aliUV = projectedUV.xy / projectedUV.z; //(u_Homography * vec3(refUV, 1.0));
-
   vec3 colRef;
   // TODO: Use border clamping for this
-  if(refUV.x >= 0.0 && refUV.x <= 1.0 && refUV.y >= 0.0 && refUV.y <= 1.0) {
-    colRef = texture(u_RefTexture, refUV).xyz;
+  if(p_RefUV.x >= 0.0 && p_RefUV.x <= 1.0 && p_RefUV.y >= 0.0 && p_RefUV.y <= 1.0) {
+    colRef = texture(u_RefTexture, p_RefUV).xyz;
   } else {
     colRef = vec3(0.0, 0.0, 0.0);
   }
   vec3 colAli;// = texture(u_AlignTexture, p_UV) * 10.0;
-  if(aliUV.x >= 0.0 && aliUV.x <= 1.0 && aliUV.y >= 0.0 && aliUV.y <= 1.0) {
-    colAli = texture(u_AlignTexture, aliUV).xyz;
+  if(p_AlignUV.x >= 0.0 && p_AlignUV.x <= 1.0 && p_AlignUV.y >= 0.0 && p_AlignUV.y <= 1.0) {
+    colAli = texture(u_AlignTexture, p_AlignUV).xyz;
   } else {
     colAli = vec3(0.0, 0.0, 0.0);
   }

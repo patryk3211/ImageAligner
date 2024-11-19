@@ -19,6 +19,7 @@ class ViewImage {
   std::shared_ptr<GL::VAO> m_vao;
 
   double m_pixelSize;
+  double m_aspect;
   double m_maxValue;
 
 public:

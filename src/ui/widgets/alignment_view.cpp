@@ -1,6 +1,4 @@
 #include "ui/widgets/alignment_view.hpp"
-#include "objects/matrix.hpp"
-#include "objects/registration.hpp"
 #include "ui/state.hpp"
 
 #include <GL/gl.h>
@@ -97,11 +95,15 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
 
   float matrix[9];
   if(!m_alignImage->isReference()) {
-    m_alignImage->getRegistration()->matrix().read(matrix);;
+    auto mat = m_alignImage->getRegistration()->matrix().read();
+    cv::Mat invMat = mat.inv();
+    for(int r = 0; r < 3; ++r)
+      for(int c = 0; c < 3; ++c)
+        matrix[c + r * 3] = invMat.at<double>(r, c);
 
     // Scale translations
-    matrix[2] *= -m_pixelSize;
-    matrix[5] *=  m_pixelSize * m_refAspect;
+    matrix[2] *= m_pixelSize;
+    matrix[5] *= -m_pixelSize;
   } else {
     // Identity matrix
     HomographyMatrix::identity(matrix);
@@ -142,6 +144,8 @@ void AlignmentView::referenceChanged() {
   // Read only the first layer
   params.setDimension(2, 1, 1, 1);
 
+  m_refWidth = params.width();
+  m_refHeight = params.height();
   m_pixelSize = 1.0 / params.width();
   m_refAspect = (float)params.width() / params.height();
 

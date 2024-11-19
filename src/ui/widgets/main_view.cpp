@@ -166,9 +166,11 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_viewMatrix[0] = scaleFactor;
   m_viewMatrix[5] = -scaleFactor * aspect;
   m_viewMatrix[10] = 1.0;
+  m_viewMatrix[15] = 1.0;
+
   m_viewMatrix[12] = m_offset[0] * m_scale;
   m_viewMatrix[13] = -m_offset[1] * m_scale;
-  m_viewMatrix[15] = 1.0;
+
   // {
   //   scaleFactor, 0.0, 0.0, 0.0,
   //   0.0, -scaleFactor * aspect, 0.0, 0.0,
@@ -335,8 +337,8 @@ void ViewImage::makeVertices(float scaleX, float scaleY) {
   float buffer[BUFFER_STRIDE * 4];
 
   for(int i = 0; i < 4; ++i) {
-    float x = MODEL_TEMPLATE[i * BUFFER_STRIDE] * scaleX;
-    float y = MODEL_TEMPLATE[i * BUFFER_STRIDE + 1] * scaleY;
+    float x = (MODEL_TEMPLATE[i * BUFFER_STRIDE]) * scaleX;
+    float y = (MODEL_TEMPLATE[i * BUFFER_STRIDE + 1]) * scaleY;
     // Position
     buffer[i * BUFFER_STRIDE] = x;
     buffer[i * BUFFER_STRIDE + 1] = y;
@@ -366,7 +368,9 @@ void ViewImage::loadTexture(ImageProvider& image, int index) {
 
   auto data = image.getPixels(params);
   m_texture->load(params.width(), params.height(), GL_RED, GL_UNSIGNED_SHORT, data.get(), GL_R16);
-  makeVertices(1.0, 1.0 * ((float)params.height() / params.width()));
+
+  m_aspect = (double)params.width() / params.height();
+  makeVertices(1.0, 1.0 / m_aspect);
 }
 
 Glib::RefPtr<Image> ViewImage::imageObject() {
@@ -382,11 +386,11 @@ void ViewImage::render(GL::Program& program) {
       HomographyMatrix::identity(matrix);
     } else {
       reg->matrix().read(matrix);
-    }
 
-    // Scale translations by pixel size
-    matrix[2] *=  m_pixelSize;
-    matrix[5] *= -m_pixelSize;
+      // Scale translations by pixel size
+      matrix[2] *=  m_pixelSize;
+      matrix[5] *= -m_pixelSize / m_aspect;
+    }
   } else {
     // Identity matrix
     HomographyMatrix::identity(matrix);

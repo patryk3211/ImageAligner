@@ -30,6 +30,9 @@ class AlignmentView : public GLAreaPlus {
   std::shared_ptr<Selection> m_viewSection;
   double m_pixelSize;
 
+  double m_refWidth;
+  double m_refHeight;
+
   Glib::RefPtr<Obj::Image> m_referenceImage;
   Glib::RefPtr<Obj::Image> m_alignImage;
 

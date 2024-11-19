@@ -12,6 +12,8 @@ class Context {
 
   struct ImgData {
     ImgPtr m_image;
+    int m_width;
+    int m_height;
 
     std::vector<cv::KeyPoint> m_keypoints;
     cv::Mat m_descriptors;

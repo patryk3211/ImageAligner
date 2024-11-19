@@ -1,5 +1,7 @@
 #include "objects/matrix.hpp"
 
+#include <spdlog/spdlog.h>
+
 using namespace Obj;
 
 HomographyMatrix::HomographyMatrix()
@@ -41,6 +43,11 @@ cv::Mat HomographyMatrix::read() const {
 }
 
 void HomographyMatrix::write(const cv::Mat& matrix) {
+  if(matrix.depth() != CV_64F) {
+    spdlog::error("Invalid matrix depth in HomographyMatrix::write, got {}", matrix.depth());
+    return;
+  }
+    
   for(int i = 0; i < 9; ++i)
     set(i, matrix.at<double>(i));
 }
