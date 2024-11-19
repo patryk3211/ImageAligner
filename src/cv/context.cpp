@@ -15,7 +15,7 @@ using namespace Obj;
 
 Context::Context(ImageProvider& provider)
   : m_provider(provider) {
-  m_detector = cv::AKAZE::create(cv::AKAZE::DESCRIPTOR_KAZE, 256, 4, 0.0005, 6, 6, cv::KAZE::DIFF_PM_G2);
+  m_detector = cv::AKAZE::create(cv::AKAZE::DESCRIPTOR_KAZE, 256, 4, 0.0002, 6, 6, cv::KAZE::DIFF_PM_G2);
   //cv::SIFT::create(0, 5, 0.06, 10, 1.3);
   m_matcher = 
   //cv::BFMatcher::create(cv::NORM_HAMMING);
@@ -29,48 +29,38 @@ void Context::addReference(const ImgPtr& image) {
 void Context::matchFeatures(const ImgPtr& image) {
   auto& ref = m_referenceImages.front();
 
-  cv::Mat refMat;
-  m_provider.getImageMatrix(ref.m_image->getFileIndex()).convertTo(refMat, CV_8UC1, 20.0 / 256.0);
-  cv::Mat imgMat;
-  m_provider.getImageMatrix(image->getFileIndex()).convertTo(imgMat, CV_8UC1, 20.0 / 256.0);
-
   auto data = detect(image);
 
-  auto& trainMat = refMat;
-  auto& queryMat = imgMat;
-  auto& trainImg = ref;
-  auto& queryImg = data;
-
   std::vector<std::vector<cv::DMatch>> knnMatches;
-  m_matcher->knnMatch(queryImg.m_descriptors, trainImg.m_descriptors, knnMatches, 2);
+  m_matcher->knnMatch(data.m_descriptors, ref.m_descriptors, knnMatches, 2);
 
   std::vector<cv::DMatch> goodMatches;
-  // m_matcher->match(ref.m_descriptors, data.m_descriptors, goodMatches);
-  const float ratio_thresh = 0.7f;
-  for(size_t i = 0; i < knnMatches.size(); i++) {
-    spdlog::info("i = {}, ratio = {}", i, knnMatches[i][0].distance / knnMatches[i][1].distance);
-    if(knnMatches[i][0].distance < ratio_thresh * knnMatches[i][1].distance) {
-      goodMatches.push_back(knnMatches[i][0]);
-    }
-  }
 
   std::vector<cv::Point2f> refPoints;
   std::vector<cv::Point2f> alignPoints;
-  for(size_t i = 0; i < goodMatches.size(); ++i) {
-    auto& match = goodMatches[i];
 
-    auto refPt = trainImg.m_keypoints[match.trainIdx].pt;
-    auto aliPt = queryImg.m_keypoints[match.queryIdx].pt;
+  const float ratio_thresh = 0.7f;
+  for(size_t i = 0; i < knnMatches.size(); i++) {
+    spdlog::trace("KNN Match: i = {}, ratio = {}", i, knnMatches[i][0].distance / knnMatches[i][1].distance);
 
-    refPoints.push_back(refPt);
-    alignPoints.push_back(aliPt);
+    if(knnMatches[i][0].distance < ratio_thresh * knnMatches[i][1].distance) {
+      auto& match = knnMatches[i][0];
+      goodMatches.push_back(match);
 
-    spdlog::info("Match ref = ({}, {}), ali = ({}, {})", refPt.x, refPt.y, aliPt.x, aliPt.y);
+      auto refPt = ref.m_keypoints[match.trainIdx].pt;
+      auto aliPt = data.m_keypoints[match.queryIdx].pt;
+
+      refPoints.push_back(refPt);
+      alignPoints.push_back(aliPt);
+    }
   }
 
-  std::vector<char> mask;
+  spdlog::debug("Found {} matches between sequence images (reference index = {}) and (image index = {})",
+                refPoints.size(), ref.m_image->getSequenceIndex(), data.m_image->getSequenceIndex());
+
   cv::Mat affine = cv::estimateAffine2D(alignPoints, refPoints, cv::noArray(), cv::RANSAC, 4.0);
   // cv::Mat homography = cv::findHomography(alignPoints, refPoints, cv::RHO, 2.0, mask);
+
   cv::Mat homography;
   homography.create(3, 3, CV_64F);
   homography.at<double>(0, 0) = affine.at<double>(0, 0);
@@ -84,25 +74,12 @@ void Context::matchFeatures(const ImgPtr& image) {
   homography.at<double>(2, 1) = 0;
   homography.at<double>(2, 2) = 1;
 
-  for(int i = 0; i < mask.size(); ++i) {
-    spdlog::info("Mask i = {}, value: {}", i, (int) mask[i]);
-  }
+  spdlog::debug("Calculated homography matrix:");
+  spdlog::debug("  {:9.3f} {:9.3f} {:9.3f}", homography.at<double>(0), homography.at<double>(1), homography.at<double>(2));
+  spdlog::debug("  {:9.3f} {:9.3f} {:9.3f}", homography.at<double>(3), homography.at<double>(4), homography.at<double>(5));
+  spdlog::debug("  {:9.3f} {:9.3f} {:9.3f}", homography.at<double>(6), homography.at<double>(7), homography.at<double>(8));
 
   image->getRegistration()->matrix().write(homography);
-
-  // spdlog::info("mask {}", mask.size());
-
-  spdlog::debug("{:9.3f} {:9.3f} {:9.3f}", homography.at<double>(0), homography.at<double>(1), homography.at<double>(2));
-  spdlog::debug("{:9.3f} {:9.3f} {:9.3f}", homography.at<double>(3), homography.at<double>(4), homography.at<double>(5));
-  spdlog::debug("{:9.3f} {:9.3f} {:9.3f}", homography.at<double>(6), homography.at<double>(7), homography.at<double>(8));
-
-  // cv::Mat imgMatches;
-  // cv::drawMatches(queryMat, queryImg.m_keypoints, trainMat, trainImg.m_keypoints, goodMatches, imgMatches, cv::Scalar::all(-1), cv::Scalar::all(-1), { }, cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-  // cv::imwrite("img.png", imgMatches);
-
-  // cv::Mat warped;
-  // cv::warpPerspective(imgMat, warped, homography, { imgMat.cols, imgMat.rows });
-  // cv::imwrite("warp.png", (warped * 0.5) + (refMat * 0.5));
 }
 
 Context::ImgData Context::detect(const ImgPtr& image) {
@@ -116,12 +93,8 @@ Context::ImgData Context::detect(const ImgPtr& image) {
   ImgData data = { image, raw.cols, raw.rows };
   m_detector->detectAndCompute(mat, cv::noArray(), data.m_keypoints, data.m_descriptors);
 
-  spdlog::info("Found {} keypoints in image (file index = {})", data.m_keypoints.size(), image->getFileIndex());
-
-  // cv::Mat outImg;
-  // cv::drawKeypoints(mat, data.m_keypoints, outImg, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-  // cv::imwrite("key.png", outImg);
-
+  spdlog::debug("Found {} keypoints in image (sequence index = {})",
+                data.m_keypoints.size(), image->getSequenceIndex());
   return data;
 }
 
