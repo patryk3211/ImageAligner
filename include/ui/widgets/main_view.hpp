@@ -52,6 +52,7 @@ public:
 class MainView : public GLAreaPlus {
   std::shared_ptr<GL::Program> m_imgProgram;
   std::shared_ptr<GL::Program> m_selectProgram;
+  std::shared_ptr<GL::VAO> m_dummyVAO;
   std::shared_ptr<UI::State> m_state;
   SequenceView* m_sequenceView;
 

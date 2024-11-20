@@ -57,6 +57,8 @@ void AlignmentView::realize() {
   m_refTexture = createTexture();
   m_alignTexture = createTexture();
 
+  m_dummyVAO = createVertexArray();
+
   // Reload textures
   referenceChanged();
   sequenceViewSelectionChanged(0, 0);
@@ -72,6 +74,8 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     spdlog::trace("(AlignmentView) Render quick end");
     return true;
   }
+
+  m_dummyVAO->bind();
 
   m_program->use();
 
@@ -122,6 +126,8 @@ bool AlignmentView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   m_program->uniform2f("u_AlignLevels", aliStats->getMin() / typeMax, aliStats->getMax() / typeMax);
 
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  m_dummyVAO->unbind();
 
   spdlog::trace("(AlignmentView) Render end");
   return true;

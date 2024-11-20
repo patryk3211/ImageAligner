@@ -14,8 +14,8 @@ uniform float u_DisplayParam;
 uniform vec2 u_RefLevels;
 uniform vec2 u_AlignLevels;
 
-vec3 applyLevels(vec3 input, float m, float M) {
-  return (clamp(input, m, M) - m) / (M - m);
+vec3 applyLevels(vec3 val, float m, float M) {
+  return (clamp(val, m, M) - m) / (M - m);
 }
 
 void main() {

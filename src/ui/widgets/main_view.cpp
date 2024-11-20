@@ -145,6 +145,8 @@ void MainView::realize() {
 
   m_imgProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/main/vert.glsl", "ui/gl/main/frag.glsl"));
   m_selectProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/selector/vert.glsl", "ui/gl/selector/frag.glsl"));
+
+  m_dummyVAO = createVertexArray();
 }
 
 #define FLAG_DRAW_BORDER 1
@@ -198,6 +200,8 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   }
 
   // Render selections
+  m_dummyVAO->bind();
+
   m_selectProgram->use();
   m_selectProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
   m_selectProgram->uniform1f("u_Scale", m_scale / get_width());
@@ -212,6 +216,8 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   for(auto& sel : m_selections) {
     renderSelection(sel->m_x, sel->m_y, sel->m_width, sel->m_height);
   }
+
+  m_dummyVAO->unbind();
 
   // Print all errors that occurred
   GLenum errCode;

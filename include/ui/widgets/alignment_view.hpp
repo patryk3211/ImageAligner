@@ -16,6 +16,8 @@ class AlignmentView : public GLAreaPlus {
   std::shared_ptr<GL::Texture> m_refTexture;
   std::shared_ptr<GL::Texture> m_alignTexture;
 
+  std::shared_ptr<GL::VAO> m_dummyVAO;
+
   SequenceView *m_sequenceView;
   MainView *m_mainView;
   Gtk::AspectFrame *m_aspectFrame;
