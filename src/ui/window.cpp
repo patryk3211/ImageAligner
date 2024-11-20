@@ -1,4 +1,5 @@
 #include "ui/window.hpp"
+#include "ui/pages/cv.hpp"
 #include "ui/state.hpp"
 
 using namespace UI;
@@ -18,6 +19,9 @@ Window::Window() {
   m_saveChangesDialog = 0;
 
   signal_close_request().connect(sigc::mem_fun(*this, &Window::closeRequest), false);
+
+  auto stacker = builder->get_widget<Gtk::Stack>("tool_sidebar");
+  addPage<Pages::CV>(stacker);
 }
 
 void Window::setState(const std::shared_ptr<UI::State>& state) {
@@ -26,6 +30,9 @@ void Window::setState(const std::shared_ptr<UI::State>& state) {
   m_sequenceView->connectState(state);
   m_mainView->connectState(state);
   m_alignmentView->connectState(state);
+
+  for(auto& page : m_toolPages)
+    page->connectState(state);
 }
 
 bool Window::closeRequest() {

@@ -26,6 +26,9 @@ set(EXEC_SOURCE
   src/ui/window.cpp
   src/ui/state.cpp
 
+  src/ui/pages/page.cpp
+  src/ui/pages/cv.cpp
+
   src/ui/widgets/util.cpp
   src/ui/widgets/sequence_list.cpp
   src/ui/widgets/gl_area_plus.cpp
@@ -104,6 +107,7 @@ function(compile_blueprint target input)
 endfunction(compile_blueprint)
 
 compile_blueprint(aligner main.blp)
+compile_blueprint(aligner cv.blp)
 
 file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/resource/css/main.scss ${CMAKE_CURRENT_BINARY_DIR}/ui/main.scss)
 file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/resource/gl ${CMAKE_CURRENT_BINARY_DIR}/ui/gl SYMBOLIC)

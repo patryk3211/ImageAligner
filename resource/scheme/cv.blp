@@ -1,0 +1,136 @@
+using Gtk 4.0;
+
+Box root {
+  orientation: vertical;
+
+  Expander {
+    label: _("Detector parameters");
+
+    child: Grid {
+      row-spacing: 8;
+      column-spacing: 8;
+      Label {
+        label: _("Threshold");
+        layout {
+          column: 0;
+          row: 0;
+        }
+      }
+      SpinButton threshold {
+        adjustment: Adjustment {
+          step-increment: 0.00001;
+          lower: 0;
+          upper: 1;
+          value: 0.0002;
+        };
+        digits: 5;
+        layout {
+          column: 1;
+          row: 0;
+        }
+      }
+      Label {
+        label: _("Descriptor Size");
+        layout {
+          column: 0;
+          row: 1;
+        }
+      }
+      SpinButton descriptor_size {
+        adjustment: Adjustment {
+          step-increment: 1;
+          lower: 0;
+          upper: 1024;
+          value: 256;
+        };
+        layout {
+          column: 1;
+          row: 1;
+        }
+      }
+      Label {
+        label: _("Descriptor channels");
+        layout {
+          column: 0;
+          row: 2;
+        }
+      }
+      SpinButton descriptor_channels {
+        adjustment: Adjustment {
+          step-increment: 1;
+          lower: 1;
+          upper: 3;
+          value: 3;
+        };
+        layout {
+          column: 1;
+          row: 2;
+        }
+      }
+      Label {
+        label: _("Octaves");
+        layout {
+          column: 0;
+          row: 3;
+        }
+      }
+      SpinButton octaves {
+        adjustment: Adjustment {
+          step-increment: 1;
+          lower: 1;
+          upper: 10;
+          value: 6;
+        };
+        layout {
+          column: 1;
+          row: 3;
+        }
+      }
+      Label {
+        label: _("Octave layers");
+        layout {
+          column: 0;
+          row: 4;
+        }
+      }
+      SpinButton octave_layers {
+        adjustment: Adjustment {
+          step-increment: 1;
+          lower: 1;
+          upper: 10;
+          value: 6;
+        };
+        layout {
+          column: 1;
+          row: 4;
+        }
+      }
+    };
+  }
+
+  Expander {
+    label: _("Keypoints");
+
+    child: Box {
+      
+    };
+  }
+
+  Box {
+    orientation: vertical;
+    Box {
+      CheckButton only_selected {
+        label: _("Only process selected");
+      }
+    }
+    Box {
+      spacing: 8;
+
+      Button {
+        label: _("Find keypoints");
+        action-name: "cv.keypoints";
+      }
+    }
+  }
+}
+

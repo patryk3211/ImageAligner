@@ -13,26 +13,40 @@ using namespace OpenCV;
 using namespace IO;
 using namespace Obj;
 
-Context::Context(ImageProvider& provider)
-  : m_provider(provider) {
-  m_detector = cv::AKAZE::create(cv::AKAZE::DESCRIPTOR_KAZE, 256, 4, 0.0002, 6, 6, cv::KAZE::DIFF_PM_G2);
-  //cv::SIFT::create(0, 5, 0.06, 10, 1.3);
-  m_matcher = 
-  //cv::BFMatcher::create(cv::NORM_HAMMING);
-  cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
+Context::Context(ImageProvider& provider, cv::Ptr<cv::Feature2D> detector, cv::Ptr<cv::DescriptorMatcher> matcher)
+  : m_provider(provider)
+  , m_detector(detector)
+  , m_matcher(matcher) {
+  if(!m_detector) {
+    m_detector = cv::AKAZE::create(cv::AKAZE::DESCRIPTOR_KAZE, 256, 4, 0.0002, 6, 6, cv::KAZE::DIFF_PM_G2);
+    //cv::SIFT::create(0, 5, 0.06, 10, 1.3);
+  }
+  if(!m_matcher) {
+    m_matcher = 
+    //cv::BFMatcher::create(cv::NORM_HAMMING);
+    cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
+  }
 }
 
 void Context::addReference(const ImgPtr& image) {
-  m_referenceImages.push_back(detect(image));
+  m_referenceImages.push_back(processImage(image));
+}
+
+std::optional<std::reference_wrapper<const std::vector<cv::KeyPoint>>> Context::getKeypoints(const ImgPtr& image) {
+  auto data = getData(image);
+  return data ? std::optional { data->m_keypoints } : std::nullopt;
+}
+
+void Context::findKeypoints(const ImgPtr& image, bool force) {
+  static_cast<void>(processImage(image, force));
 }
 
 void Context::matchFeatures(const ImgPtr& image) {
   auto& ref = m_referenceImages.front();
-
-  auto data = detect(image);
+  auto data = processImage(image);
 
   std::vector<std::vector<cv::DMatch>> knnMatches;
-  m_matcher->knnMatch(data.m_descriptors, ref.m_descriptors, knnMatches, 2);
+  m_matcher->knnMatch(data->m_descriptors, ref->m_descriptors, knnMatches, 2);
 
   std::vector<cv::DMatch> goodMatches;
 
@@ -47,8 +61,8 @@ void Context::matchFeatures(const ImgPtr& image) {
       auto& match = knnMatches[i][0];
       goodMatches.push_back(match);
 
-      auto refPt = ref.m_keypoints[match.trainIdx].pt;
-      auto aliPt = data.m_keypoints[match.queryIdx].pt;
+      auto refPt = ref->m_keypoints[match.trainIdx].pt;
+      auto aliPt = data->m_keypoints[match.queryIdx].pt;
 
       refPoints.push_back(refPt);
       alignPoints.push_back(aliPt);
@@ -56,7 +70,7 @@ void Context::matchFeatures(const ImgPtr& image) {
   }
 
   spdlog::debug("Found {} matches between sequence images (reference index = {}) and (image index = {})",
-                refPoints.size(), ref.m_image->getSequenceIndex(), data.m_image->getSequenceIndex());
+                refPoints.size(), ref->m_image->getSequenceIndex(), data->m_image->getSequenceIndex());
 
   cv::Mat affine = cv::estimateAffine2D(alignPoints, refPoints, cv::noArray(), cv::RANSAC, 4.0);
   // cv::Mat homography = cv::findHomography(alignPoints, refPoints, cv::RHO, 2.0, mask);
@@ -69,7 +83,7 @@ void Context::matchFeatures(const ImgPtr& image) {
   homography.at<double>(1, 0) = affine.at<double>(1, 0);
   homography.at<double>(1, 1) = affine.at<double>(1, 1);
   // To make this matrix work in Siril we need to transform the Y translation a bit
-  homography.at<double>(1, 2) = -affine.at<double>(1, 2) * ref.m_width / ref.m_height;
+  homography.at<double>(1, 2) = -affine.at<double>(1, 2) * ref->m_width / ref->m_height;
   homography.at<double>(2, 0) = 0;
   homography.at<double>(2, 1) = 0;
   homography.at<double>(2, 2) = 1;
@@ -82,19 +96,48 @@ void Context::matchFeatures(const ImgPtr& image) {
   image->getRegistration()->matrix().write(homography);
 }
 
-Context::ImgData Context::detect(const ImgPtr& image) {
+std::shared_ptr<Context::ImgData> Context::getData(const ImgPtr& image) {
+  auto iter = m_imageData.find(image);
+  if(iter != m_imageData.end()) {
+    // Found in storage
+    return iter->second;
+  } else {
+    // Not found
+    return nullptr;
+  }
+}
+
+std::shared_ptr<Context::ImgData> Context::processImage(const ImgPtr& image, bool force) {
+  auto iter = m_imageData.find(image);
+  if(iter != m_imageData.end()) {
+    // Found in storage
+    if(force) {
+      // Remove and process again
+      m_imageData.erase(iter);
+    } else {
+      // Return available data
+      return iter->second;
+    }
+  }
+
+  // Process image
   cv::Mat raw;
   m_provider.getImageMatrix(image->getFileIndex()).convertTo(raw, CV_32F);
+  // TODO: Use levels from image object
   raw = ((cv::min(cv::max(raw, 990.0), 3900.0) - 990.0) / (3900.0 - 990.0));
 
   cv::Mat mat;
   raw.convertTo(mat, CV_8U, 255);
 
-  ImgData data = { image, raw.cols, raw.rows };
-  m_detector->detectAndCompute(mat, cv::noArray(), data.m_keypoints, data.m_descriptors);
+  std::shared_ptr<ImgData> data(new ImgData { image, raw.cols, raw.rows, false });
+
+  m_detector->detectAndCompute(mat, cv::noArray(), data->m_keypoints, data->m_descriptors);
 
   spdlog::debug("Found {} keypoints in image (sequence index = {})",
-                data.m_keypoints.size(), image->getSequenceIndex());
+                data->m_keypoints.size(), image->getSequenceIndex());
+
+  // Insert into storage
+  m_imageData.insert({ image, data });
   return data;
 }
 
