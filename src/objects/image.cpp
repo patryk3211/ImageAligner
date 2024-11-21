@@ -183,6 +183,10 @@ void Image::notifyRedraw() {
   m_sequence.lock()->markDirty();
 }
 
+bool Image::isMarked() {
+  return m_notified;
+}
+
 void Image::clearRedrawFlag() {
   m_notified = false;
 }

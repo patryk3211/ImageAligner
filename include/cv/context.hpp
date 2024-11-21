@@ -18,6 +18,9 @@ class Context {
 
     std::vector<cv::KeyPoint> m_keypoints;
     cv::Mat m_descriptors;
+
+    ImgData(const ImgPtr& image, int width, int height);
+    ~ImgData();
   };
 
   cv::Ptr<cv::Feature2D> m_detector;

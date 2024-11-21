@@ -39,14 +39,15 @@ private:
   redraw_signal_type m_redrawSignal;
   bool m_notified;
 
-  void notifyRedraw();
-
 public:
   Image(int index, int layerCount, const Glib::RefPtr<IO::Sequence>& sequence);
   virtual ~Image() = default;
 
+  void notifyRedraw();
+
   redraw_signal_type signalRedraw();
   void clearRedrawFlag();
+  bool isMarked();
   bool isReference();
 
   void setRegistration(const Glib::RefPtr<Registration>& value);

@@ -133,3 +133,11 @@ void GLAreaPlus::unrealize() {
   }
 }
 
+void GLAreaPlus::postRender() {
+  // Print all errors that occurred
+  GLenum errCode;
+  while((errCode = glGetError()) != GL_NO_ERROR) {
+    spdlog::error("GL Error {}", errCode);
+  }
+}
+

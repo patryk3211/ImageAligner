@@ -32,7 +32,6 @@ void Buffer::unbind() {
 
 void Buffer::store(uint length, const void *data) {
   prepare_context();
-  bind();
   glBufferData(GL_ARRAY_BUFFER, length, data, GL_STATIC_DRAW);
 }
 

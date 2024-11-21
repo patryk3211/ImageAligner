@@ -50,23 +50,29 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
 
   memset(m_currentSelection, 0, sizeof(m_currentSelection));
   m_makeSelection = false;
+
+  m_mode = RenderMode::DEFAULT;
+}
+
+void MainView::resetViewport() {
+  // Reset viewport position and scale
+  m_scale = get_width() * 2.0;
+  m_offset[0] = -1.0 / m_scale;
+  m_offset[1] = -0.5 / m_scale;
 }
 
 void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   m_state = state;
   m_images.clear();
+  resetViewport();
 
-  // Reset viewport position
-  m_offset[0] = 0;
-  m_offset[1] = 0;
-  m_scale = get_width();
-
+  // Calculate pixel size from reference image
   auto refSeqImg = m_state->m_sequence->image(m_state->m_sequence->getReferenceImageIndex());
   auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg->getFileIndex());
   m_pixelSize = 1.0 / refParams.width();
 
-  int x = 0, y = 0;
-  for(int i = 0; i < m_state->m_sequence->getImageCount() && i < 2; ++i) {
+  // Construct image views for all images in the sequence
+  for(int i = 0; i < m_state->m_sequence->getImageCount(); ++i) {
     auto imageView = std::make_shared<ViewImage>(*this, m_sequenceView->getImage(i));
     imageView->imageObject()->signalRedraw().connect(sigc::mem_fun(*this, &MainView::queue_draw));
     m_images.push_back(imageView);
@@ -137,30 +143,41 @@ void MainView::sequenceViewSelectionChanged(uint position, uint nitems) {
   m_levelBindings[0] = Glib::Binding::bind_property(stats->propertyMin(), m_minLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
   m_levelBindings[1] = Glib::Binding::bind_property(stats->propertyMax(), m_maxLevelBtn->property_value(), Glib::Binding::Flags::SYNC_CREATE | Glib::Binding::Flags::BIDIRECTIONAL);
 
+  m_keypointCount = 0;
   queue_draw();
 }
 
 void MainView::realize() {
   GLAreaPlus::realize();
 
+  // Prepare GL objects
   m_imgProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/main/vert.glsl", "ui/gl/main/frag.glsl"));
   m_selectProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/selector/vert.glsl", "ui/gl/selector/frag.glsl"));
+  m_keypointProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/keypoint/vert.glsl", "ui/gl/keypoint/frag.glsl"));
 
   m_dummyVAO = createVertexArray();
+  
+  m_keypointsVAO = createVertexArray();
+  m_keypointsBuffer = createBuffer();
+
+  // Bind buffer to VAO and set the format
+  m_keypointsVAO->bind();
+  m_keypointsBuffer->bind();
+  m_keypointsVAO->attribPointer(0, 2, GL_FLOAT, false, 4 * sizeof(float), 0);
+  m_keypointsVAO->attribPointer(1, 2, GL_FLOAT, false, 4 * sizeof(float), 2 * sizeof(float));
+  m_keypointsVAO->unbind();
+}
+
+void MainView::setRenderMode(RenderMode mode) {
+  m_mode = mode;
+  resetViewport();
+  queue_draw();
 }
 
 #define FLAG_DRAW_BORDER 1
 #define FLAG_DRAW_UNSELECTED 2
 
-bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
-  spdlog::trace("(MainView) Redraw start");
-
-  glClearColor(0, 0, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  // Activate image render program
-  m_imgProgram->use();
-
+void MainView::calculateViewMatrix() {
   // Recalculate view/projection matrix
   float aspect = (float)get_width() / get_height();
   float scaleFactor = m_scale / get_width();
@@ -172,13 +189,11 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
 
   m_viewMatrix[12] = m_offset[0] * m_scale;
   m_viewMatrix[13] = -m_offset[1] * m_scale;
+}
 
-  // {
-  //   scaleFactor, 0.0, 0.0, 0.0,
-  //   0.0, -scaleFactor * aspect, 0.0, 0.0,
-  //   0.0, 0.0, 1.0, 0.0,
-  //   m_offset[0] * m_scale, -m_offset[1] * m_scale, 0.0, 1.0,
-  // };
+void MainView::renderModeDefault() {
+  // Activate image render program
+  m_imgProgram->use();
 
   m_imgProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
   m_imgProgram->uniform1i("u_Texture", 0);
@@ -199,10 +214,18 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
     image->render(*m_imgProgram);
   }
 
+  // Put selections on top of images
+  renderAllSelections();
+
+  setRenderMode(RenderMode::KEYPOINTS);
+}
+
+void MainView::renderAllSelections() {
   // Render selections
   m_dummyVAO->bind();
-
   m_selectProgram->use();
+
+  // Set shared render parameters
   m_selectProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
   m_selectProgram->uniform1f("u_Scale", m_scale / get_width());
   m_selectProgram->uniform1f("u_Width", get_width());
@@ -218,12 +241,110 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
   }
 
   m_dummyVAO->unbind();
+}
 
-  // Print all errors that occurred
-  GLenum errCode;
-  while((errCode = glGetError()) != GL_NO_ERROR) {
-    spdlog::error("GL Error {}", errCode);
+void MainView::renderModeKeypoints() {
+  // Render currently selected image
+  auto view = getView(m_sequenceView->getSelectedIndex());
+  if(!view)
+    return;
+
+  // If the image is marked as dirty we need to rebuild the keypoints mesh
+  auto img = view->imageObject();
+  if(img->isMarked() || m_keypointCount == 0) {
+    rebuildKeypointMesh(img);
   }
+
+  m_imgProgram->use();
+  m_imgProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+  m_imgProgram->uniform1i("u_Texture", 0);
+  m_imgProgram->uniform1i("u_Flags", 0);
+  view->render(*m_imgProgram, false);
+
+  // Draw keypoints
+  m_keypointsVAO->bind();
+  m_keypointProgram->use();
+  m_keypointProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+
+  glDrawArrays(GL_TRIANGLES, 0, m_keypointCount * 6);
+  m_keypointsVAO->unbind();
+}
+
+void MainView::rebuildKeypointMesh(const Glib::RefPtr<Obj::Image>& image) {
+  std::vector<float> data;
+  m_keypointCount = 0;
+
+  auto keypoints = static_cast<std::vector<cv::KeyPoint>*>(image->get_data("keypoints"));
+  if(keypoints) {
+    for(auto& point : *keypoints) {
+      addKeypoint(data, point);
+    }
+  }
+
+  m_keypointsBuffer->bind();
+  m_keypointsBuffer->store(data.size() * sizeof(float), data.data());
+  m_keypointsBuffer->unbind();
+
+  spdlog::debug("Mesh keypoint size = {} bytes for {} keypoints", data.size() * sizeof(float), m_keypointCount);
+}
+
+void MainView::addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoint) {
+  auto x = keypoint.pt.x;
+  auto y = keypoint.pt.y;
+
+  float angle = keypoint.angle * M_PI / 180.0;
+  float sinA = std::sin(angle);
+  float cosA = std::cos(angle);
+
+  if(keypoint.angle == -1) {
+    sinA = 0;
+    cosA = 1;
+  }
+
+  auto addVertex = [&](float offsetX, float offsetY) {
+    float oX = (cosA * offsetX + sinA * offsetY) * keypoint.size;
+    float oY = (cosA * offsetY - sinA * offsetX) * keypoint.size;
+    // Position
+    data.push_back((x - oX) * m_pixelSize);
+    data.push_back((y + oY) * m_pixelSize);
+    // UV
+    data.push_back(offsetX);
+    data.push_back(offsetY);
+  };
+
+  // Triangle 1
+  addVertex(-0.5f, -0.5f);
+  addVertex(-0.5f,  0.5f);
+  addVertex( 0.5f, -0.5f);
+
+  // Triangle 2
+  addVertex(-0.5f,  0.5f);
+  addVertex( 0.5f, -0.5f);
+  addVertex( 0.5f,  0.5f);
+
+  ++m_keypointCount;
+}
+
+bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
+  spdlog::trace("(MainView) Redraw start");
+
+  // Prepare view matrix
+  calculateViewMatrix();
+
+  // Clear buffer
+  glClearColor(0, 0, 0, 1);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  switch(m_mode) {
+    case RenderMode::DEFAULT:
+      renderModeDefault();
+      break;
+    case RenderMode::KEYPOINTS:
+      renderModeKeypoints();
+      break;
+  }
+
+  GLAreaPlus::postRender();
 
   spdlog::trace("(MainView) Redraw end");
   return true;
@@ -383,9 +504,9 @@ Glib::RefPtr<Image> ViewImage::imageObject() {
   return m_imageObject;
 }
 
-void ViewImage::render(GL::Program& program) {
+void ViewImage::render(GL::Program& program, bool applyMatrix) {
   float matrix[9];
-  if(!m_imageObject->isReference()) {
+  if(!m_imageObject->isReference() && applyMatrix) {
     auto reg = m_imageObject->getRegistration();
     if(!reg) {
       // Identity matrix

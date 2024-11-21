@@ -29,6 +29,8 @@ protected:
   virtual bool render(const Glib::RefPtr<Gdk::GLContext>& context) = 0;
   virtual void unrealize();
 
+  void postRender();
+
   template<typename T> std::shared_ptr<T> wrap(T* ptr) {
     std::shared_ptr<T> newPtr(ptr, [this](T* toDelete) {
       // Destructor manages the gl context

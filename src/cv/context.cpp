@@ -29,7 +29,9 @@ Context::Context(ImageProvider& provider, cv::Ptr<cv::Feature2D> detector, cv::P
 }
 
 void Context::addReference(const ImgPtr& image) {
-  m_referenceImages.push_back(processImage(image));
+  auto data = processImage(image);
+  data->m_reference = true;
+  m_referenceImages.push_back(data);
 }
 
 std::optional<std::reference_wrapper<const std::vector<cv::KeyPoint>>> Context::getKeypoints(const ImgPtr& image) {
@@ -129,7 +131,7 @@ std::shared_ptr<Context::ImgData> Context::processImage(const ImgPtr& image, boo
   cv::Mat mat;
   raw.convertTo(mat, CV_8U, 255);
 
-  std::shared_ptr<ImgData> data(new ImgData { image, raw.cols, raw.rows, false });
+  std::shared_ptr<ImgData> data(new ImgData { image, raw.cols, raw.rows });
 
   m_detector->detectAndCompute(mat, cv::noArray(), data->m_keypoints, data->m_descriptors);
 
@@ -138,6 +140,21 @@ std::shared_ptr<Context::ImgData> Context::processImage(const ImgPtr& image, boo
 
   // Insert into storage
   m_imageData.insert({ image, data });
+  image->notifyRedraw();
   return data;
+}
+
+Context::ImgData::ImgData(const ImgPtr& image, int width, int height)
+  : m_image(image)
+  , m_width(width)
+  , m_height(height)
+  , m_reference(false) {
+  // Associate key point array with the image object
+  m_image->set_data("keypoints", &m_keypoints);
+}
+
+Context::ImgData::~ImgData() {
+  // Make sure there are no dangling pointers.
+  m_image->remove_data("keypoints");
 }
 

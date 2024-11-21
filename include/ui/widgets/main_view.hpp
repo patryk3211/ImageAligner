@@ -32,7 +32,7 @@ private:
 
 public:
   Glib::RefPtr<Obj::Image> imageObject();
-  void render(GL::Program& program);
+  void render(GL::Program& program, bool applyMatrix = true);
 };
 
 class Selection {
@@ -50,40 +50,47 @@ public:
 };
 
 class MainView : public GLAreaPlus {
+  using selection_callback = std::function<void(const std::shared_ptr<Selection>&)>;
+
   std::shared_ptr<GL::Program> m_imgProgram;
   std::shared_ptr<GL::Program> m_selectProgram;
+  std::shared_ptr<GL::Program> m_keypointProgram;
   std::shared_ptr<GL::VAO> m_dummyVAO;
+  std::shared_ptr<GL::VAO> m_keypointsVAO;
+  std::shared_ptr<GL::Buffer> m_keypointsBuffer;
+  uint m_keypointCount;
+
   std::shared_ptr<UI::State> m_state;
+  std::list<std::shared_ptr<ViewImage>> m_images;
+
   SequenceView* m_sequenceView;
-
   Gtk::CheckButton *m_hideUnselected;
-
   Gtk::SpinButton *m_minLevelBtn;
   Gtk::SpinButton *m_maxLevelBtn;
   Gtk::Scale *m_minLevelScale;
   Gtk::Scale *m_maxLevelScale;
+  Glib::RefPtr<Glib::Binding> m_levelBindings[2];
 
   float m_viewMatrix[16];
-
-  std::list<std::shared_ptr<ViewImage>> m_images;
 
   float m_offset[2];
   float m_scale;
   float m_savedOffset[2];
-
-// public:
-  using selection_callback = std::function<void(const std::shared_ptr<Selection>&)>;
-
-// private:
+  double m_pixelSize;
 
   float m_currentSelection[4];
   bool m_makeSelection;
   std::optional<selection_callback> m_selectCallback;
   std::list<Selection*> m_selections;
 
-  double m_pixelSize;
+public:
+  enum class RenderMode {
+    DEFAULT,
+    KEYPOINTS
+  };
 
-  Glib::RefPtr<Glib::Binding> m_levelBindings[2];
+private:
+  RenderMode m_mode;
 
 public:
   MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& builder);
@@ -98,11 +105,22 @@ public:
   double pixelSize() const;
   std::shared_ptr<UI::State> state();
 
+  void resetViewport();
+  void setRenderMode(RenderMode mode);
+
 protected:
   virtual void realize();
   virtual bool render(const Glib::RefPtr<Gdk::GLContext>& context);
 
+  void renderModeDefault();
+  void renderModeKeypoints();
+
+  void calculateViewMatrix();
   void renderSelection(float x, float y, float width, float height);
+  void renderAllSelections();
+
+  void rebuildKeypointMesh(const Glib::RefPtr<Obj::Image>& image);
+  void addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoint);
 
   void dragBegin(double startX, double startY);
   void dragUpdate(double offsetX, double offsetY);
