@@ -55,10 +55,17 @@ class MainView : public GLAreaPlus {
   std::shared_ptr<GL::Program> m_imgProgram;
   std::shared_ptr<GL::Program> m_selectProgram;
   std::shared_ptr<GL::Program> m_keypointProgram;
+  std::shared_ptr<GL::Program> m_matchProgram;
   std::shared_ptr<GL::VAO> m_dummyVAO;
+
   std::shared_ptr<GL::VAO> m_keypointsVAO;
   std::shared_ptr<GL::Buffer> m_keypointsBuffer;
   uint m_keypointCount;
+
+  std::shared_ptr<GL::VAO> m_matchesVAO;
+  std::shared_ptr<GL::Buffer> m_matchesBuffer;
+  uint m_matchCount;
+
 
   std::shared_ptr<UI::State> m_state;
   std::list<std::shared_ptr<ViewImage>> m_images;
@@ -86,7 +93,8 @@ class MainView : public GLAreaPlus {
 public:
   enum class RenderMode {
     DEFAULT,
-    KEYPOINTS
+    KEYPOINTS,
+    MATCHES,
   };
 
 private:
@@ -114,13 +122,16 @@ protected:
 
   void renderModeDefault();
   void renderModeKeypoints();
+  void renderModeMatches();
 
   void calculateViewMatrix();
   void renderSelection(float x, float y, float width, float height);
   void renderAllSelections();
 
   void rebuildKeypointMesh(const Glib::RefPtr<Obj::Image>& image);
-  void addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoint);
+  void rebuildMatchMeshes(const Glib::RefPtr<Obj::Image>& reference, const Glib::RefPtr<Obj::Image>& image);
+  void addKeypoint(std::vector<uint8_t>& data, const cv::KeyPoint& keypoint, uint32_t rgb, float tX = 0.0f, float tY = 0.0f);
+  uint32_t randomColor();
 
   void dragBegin(double startX, double startY);
   void dragUpdate(double offsetX, double offsetY);

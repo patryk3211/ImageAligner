@@ -63,6 +63,7 @@ void Context::matchFeatures(const ImgPtr& image) {
 
   spdlog::debug("Found {} matches between sequence images (reference index = {}) and (image index = {})",
                 align->m_matches.size(), ref->m_image->getSequenceIndex(), align->m_image->getSequenceIndex());
+  image->notifyRedraw();
 }
 
 void Context::alignFeatures(const ImgPtr& image) {

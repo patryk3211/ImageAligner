@@ -24,7 +24,7 @@ void VAO::unbind() {
 
 void VAO::attribPointer(int index, int count, int type, bool normalized, int stride, uintptr_t offset) {
   glEnableVertexAttribArray(index);
-  glVertexAttribPointer(index, count, type, normalized ? GL_TRUE : GL_FALSE, stride, (void *)offset);
+  glVertexAttribPointer(index, count, type, normalized ? GL_TRUE : GL_FALSE, stride, (void *) offset);
 }
 
 void VAO::destroy() {

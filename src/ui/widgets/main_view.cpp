@@ -4,6 +4,7 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 
+#include <cstdlib>
 #include <fitsio.h>
 #include <spdlog/spdlog.h>
 
@@ -56,9 +57,15 @@ MainView::MainView(BaseObjectType* cobject, const Glib::RefPtr<Gtk::Builder>& bu
 
 void MainView::resetViewport() {
   // Reset viewport position and scale
-  m_scale = get_width() * 2.0;
-  m_offset[0] = -1.0 / m_scale;
-  m_offset[1] = -0.5 / m_scale;
+  if(m_mode == RenderMode::MATCHES) {
+    m_scale = get_width();
+    m_offset[0] = 0;
+    m_offset[1] = 0;
+  } else {
+    m_scale = get_width() * 2.0;
+    m_offset[0] = -1.0 / m_scale;
+    m_offset[1] = -0.5 / m_scale;
+  }
 }
 
 void MainView::connectState(const std::shared_ptr<UI::State>& state) {
@@ -154,24 +161,40 @@ void MainView::realize() {
   m_imgProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/main/vert.glsl", "ui/gl/main/frag.glsl"));
   m_selectProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/selector/vert.glsl", "ui/gl/selector/frag.glsl"));
   m_keypointProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/keypoint/vert.glsl", "ui/gl/keypoint/frag.glsl"));
+  m_matchProgram = wrap(GL::Program::from_path(get_context(), "ui/gl/match/vert.glsl", "ui/gl/match/frag.glsl"));
 
   m_dummyVAO = createVertexArray();
   
   m_keypointsVAO = createVertexArray();
   m_keypointsBuffer = createBuffer();
+  m_matchesVAO = createVertexArray();
+  m_matchesBuffer = createBuffer();
 
   // Bind buffer to VAO and set the format
   m_keypointsVAO->bind();
   m_keypointsBuffer->bind();
-  m_keypointsVAO->attribPointer(0, 2, GL_FLOAT, false, 4 * sizeof(float), 0);
-  m_keypointsVAO->attribPointer(1, 2, GL_FLOAT, false, 4 * sizeof(float), 2 * sizeof(float));
+
+  const size_t vertexSizeKP = 4 * sizeof(float) + 3 * sizeof(uint8_t);
+  m_keypointsVAO->attribPointer(0, 2, GL_FLOAT, false, vertexSizeKP, 0);
+  m_keypointsVAO->attribPointer(1, 2, GL_FLOAT, false, vertexSizeKP, 2 * sizeof(float));
+  m_keypointsVAO->attribPointer(2, 3, GL_UNSIGNED_BYTE, true, vertexSizeKP, 4 * sizeof(float));
   m_keypointsVAO->unbind();
+
+  m_matchesVAO->bind();
+  m_matchesBuffer->bind();
+
+  const size_t vertexSizeM = 2 * sizeof(float) + 3 * sizeof(uint8_t);
+  m_matchesVAO->attribPointer(0, 2, GL_FLOAT, false, vertexSizeM, 0);
+  m_matchesVAO->attribPointer(1, 3, GL_UNSIGNED_BYTE, true, vertexSizeM, 2 * sizeof(float));
+  m_matchesVAO->unbind();
 }
 
 void MainView::setRenderMode(RenderMode mode) {
-  m_mode = mode;
-  resetViewport();
-  queue_draw();
+  if(m_mode != mode) {
+    m_mode = mode;
+    resetViewport();
+    queue_draw();
+  }
 }
 
 #define FLAG_DRAW_BORDER 1
@@ -217,7 +240,7 @@ void MainView::renderModeDefault() {
   // Put selections on top of images
   renderAllSelections();
 
-  setRenderMode(RenderMode::KEYPOINTS);
+  setRenderMode(RenderMode::MATCHES);
 }
 
 void MainView::renderAllSelections() {
@@ -259,6 +282,11 @@ void MainView::renderModeKeypoints() {
   m_imgProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
   m_imgProgram->uniform1i("u_Texture", 0);
   m_imgProgram->uniform1i("u_Flags", 0);
+
+  float matrix[9];
+  HomographyMatrix::identity(matrix);
+  m_imgProgram->uniformMat3fv("u_Transform", 1, false, matrix);
+
   view->render(*m_imgProgram, false);
 
   // Draw keypoints
@@ -271,24 +299,97 @@ void MainView::renderModeKeypoints() {
 }
 
 void MainView::rebuildKeypointMesh(const Glib::RefPtr<Obj::Image>& image) {
-  std::vector<float> data;
+  std::vector<uint8_t> data;
   m_keypointCount = 0;
 
   auto keypoints = static_cast<std::vector<cv::KeyPoint>*>(image->get_data("keypoints"));
   if(keypoints) {
     for(auto& point : *keypoints) {
-      addKeypoint(data, point);
+      addKeypoint(data, point, 0xFF0000);
     }
   }
 
   m_keypointsBuffer->bind();
-  m_keypointsBuffer->store(data.size() * sizeof(float), data.data());
+  m_keypointsBuffer->store(data.size(), data.data());
   m_keypointsBuffer->unbind();
 
-  spdlog::debug("Mesh keypoint size = {} bytes for {} keypoints", data.size() * sizeof(float), m_keypointCount);
+  spdlog::debug("Mesh keypoint size = {} bytes for {} keypoints", data.size(), m_keypointCount);
 }
 
-void MainView::addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoint) {
+void MainView::rebuildMatchMeshes(const Glib::RefPtr<Obj::Image>& reference, const Glib::RefPtr<Obj::Image>& image) {
+  std::vector<uint8_t> keypointsData;
+  std::vector<uint8_t> matchData;
+  m_keypointCount = 0;
+  m_matchCount = 0;
+  
+  auto refKeypoints = static_cast<std::vector<cv::KeyPoint> *>(reference->get_data("keypoints"));
+  auto imgKeypoints = static_cast<std::vector<cv::KeyPoint> *>(image->get_data("keypoints"));
+
+  auto imgMatches = static_cast<std::vector<cv::DMatch> *>(image->get_data("matches"));
+  if(imgMatches && imgKeypoints && refKeypoints) {
+    auto& ref = *refKeypoints;
+    auto& img = *imgKeypoints;
+
+    for(auto& match : *imgMatches) {
+      auto& ptRef = ref[match.trainIdx];
+      auto& ptImg = img[match.queryIdx];
+
+      // Make sure related keypoints have the same color
+      uint32_t color = randomColor();
+      addKeypoint(keypointsData, ptRef, color, -1.0f);
+      addKeypoint(keypointsData, ptImg, color);
+
+      auto addVertex = [&](float x, float y) {
+        // Position
+        uint8_t *px = reinterpret_cast<uint8_t *>(&x);
+        matchData.push_back(px[0]);
+        matchData.push_back(px[1]);
+        matchData.push_back(px[2]);
+        matchData.push_back(px[3]);
+        uint8_t *py = reinterpret_cast<uint8_t *>(&y);
+        matchData.push_back(py[0]);
+        matchData.push_back(py[1]);
+        matchData.push_back(py[2]);
+        matchData.push_back(py[3]);
+
+        // Color
+        matchData.push_back((color >> 16) & 0xFF);
+        matchData.push_back((color >>  8) & 0xFF);
+        matchData.push_back((color      ) & 0xFF);
+      };
+
+      addVertex(ptRef.pt.x * m_pixelSize - 1.0f, ptRef.pt.y * m_pixelSize);
+      addVertex(ptImg.pt.x * m_pixelSize, ptImg.pt.y * m_pixelSize);
+      ++m_matchCount;
+    }
+  } else if(refKeypoints) {
+    // Render reference keypoints if matches don't exist on the image
+    for(auto& point : *refKeypoints) {
+      addKeypoint(keypointsData, point, 0xFF0000, -1.0f);
+    }
+  }
+  
+  m_keypointsBuffer->bind();
+  m_keypointsBuffer->store(keypointsData.size(), keypointsData.data());
+  m_keypointsBuffer->unbind();
+
+  m_matchesBuffer->bind();
+  m_matchesBuffer->store(matchData.size(), matchData.data());
+  m_matchesBuffer->unbind();
+
+  spdlog::debug("Mesh keypoint size = {} bytes for {} keypoints", keypointsData.size(), m_keypointCount);
+  spdlog::debug("Mesh matches size = {} bytes for {} matches", matchData.size(), m_matchCount);
+}
+
+uint32_t MainView::randomColor() {
+  uint32_t v;
+  do {
+    v = std::rand() & 0xFFFFFF;
+  } while(((v >> 16) & 0xFF) < 100 && ((v >> 8) & 0xFF) < 100 && (v & 0xFF) < 100);
+  return v;
+}
+
+void MainView::addKeypoint(std::vector<uint8_t>& data, const cv::KeyPoint& keypoint, uint32_t rgb, float tX, float tY) {
   auto x = keypoint.pt.x;
   auto y = keypoint.pt.y;
 
@@ -301,15 +402,27 @@ void MainView::addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoin
     cosA = 1;
   }
 
+  auto addData = [&](float value) {
+    uint8_t *ptr = reinterpret_cast<uint8_t *>(&value);
+    data.push_back(ptr[0]);
+    data.push_back(ptr[1]);
+    data.push_back(ptr[2]);
+    data.push_back(ptr[3]);
+  };
+
   auto addVertex = [&](float offsetX, float offsetY) {
     float oX = (cosA * offsetX + sinA * offsetY) * keypoint.size;
     float oY = (cosA * offsetY - sinA * offsetX) * keypoint.size;
     // Position
-    data.push_back((x - oX) * m_pixelSize);
-    data.push_back((y + oY) * m_pixelSize);
+    addData((x - oX) * m_pixelSize + tX);
+    addData((y + oY) * m_pixelSize + tY);
     // UV
-    data.push_back(offsetX);
-    data.push_back(offsetY);
+    addData(offsetX);
+    addData(offsetY);
+    // Color
+    data.push_back((rgb >> 16) & 0xFF);
+    data.push_back((rgb >>  8) & 0xFF);
+    data.push_back((rgb      ) & 0xFF);
   };
 
   // Triangle 1
@@ -323,6 +436,56 @@ void MainView::addKeypoint(std::vector<float>& data, const cv::KeyPoint& keypoin
   addVertex( 0.5f,  0.5f);
 
   ++m_keypointCount;
+}
+
+void MainView::renderModeMatches() {
+  // Render currently selected and reference images
+  auto imgView = getView(m_sequenceView->getSelectedIndex());
+  if(!imgView)
+    return;
+  auto refView = getView(m_state->m_sequence->getReferenceImageIndex());
+  if(!refView)
+    return;
+
+  // If any image is marked as dirty we need to rebuild the keypoints mesh
+  auto img = imgView->imageObject();
+  auto ref = refView->imageObject();
+  if(ref->isMarked() || img->isMarked() || m_keypointCount == 0) {
+    rebuildMatchMeshes(ref, img);
+  }
+
+  // Prepare static program parameters
+  m_imgProgram->use();
+  m_imgProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+  m_imgProgram->uniform1i("u_Texture", 0);
+  m_imgProgram->uniform1i("u_Flags", 0);
+
+  // Render selected on the right
+  float matrix[9];
+  HomographyMatrix::identity(matrix);
+  m_imgProgram->uniformMat3fv("u_Transform", 1, true, matrix);
+  imgView->render(*m_imgProgram, false);
+
+  // Render reference on the left
+  matrix[2] = -1.0f;
+  m_imgProgram->uniformMat3fv("u_Transform", 1, true, matrix);
+  refView->render(*m_imgProgram, false);
+
+  // Draw keypoints
+  m_keypointsVAO->bind();
+  m_keypointProgram->use();
+  m_keypointProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+
+  glDrawArrays(GL_TRIANGLES, 0, m_keypointCount * 6);
+  m_keypointsVAO->unbind();
+
+  // Draw match lines
+  m_matchesVAO->bind();
+  m_matchProgram->use();
+  m_matchProgram->uniformMat4fv("u_View", 1, false, m_viewMatrix);
+
+  glDrawArrays(GL_LINES, 0, m_matchCount * 2);
+  m_matchesVAO->unbind();
 }
 
 bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
@@ -341,6 +504,9 @@ bool MainView::render(const Glib::RefPtr<Gdk::GLContext>& context) {
       break;
     case RenderMode::KEYPOINTS:
       renderModeKeypoints();
+      break;
+    case RenderMode::MATCHES:
+      renderModeMatches();
       break;
   }
 
@@ -505,25 +671,27 @@ Glib::RefPtr<Image> ViewImage::imageObject() {
 }
 
 void ViewImage::render(GL::Program& program, bool applyMatrix) {
-  float matrix[9];
-  if(!m_imageObject->isReference() && applyMatrix) {
-    auto reg = m_imageObject->getRegistration();
-    if(!reg) {
+  if(applyMatrix) {
+    float matrix[9];
+    if(!m_imageObject->isReference()) {
+      auto reg = m_imageObject->getRegistration();
+      if(!reg) {
+        // Identity matrix
+        HomographyMatrix::identity(matrix);
+      } else {
+        reg->matrix().read(matrix);
+
+        // Scale translations by pixel size
+        matrix[2] *=  m_pixelSize;
+        matrix[5] *= -m_pixelSize / m_aspect;
+      }
+    } else {
       // Identity matrix
       HomographyMatrix::identity(matrix);
-    } else {
-      reg->matrix().read(matrix);
-
-      // Scale translations by pixel size
-      matrix[2] *=  m_pixelSize;
-      matrix[5] *= -m_pixelSize / m_aspect;
     }
-  } else {
-    // Identity matrix
-    HomographyMatrix::identity(matrix);
-  }
 
-  program.uniformMat3fv("u_Transform", 1, true, matrix);
+    program.uniformMat3fv("u_Transform", 1, true, matrix);
+  }
 
   auto stats = m_imageObject->getStats(0);
   if(stats) {
