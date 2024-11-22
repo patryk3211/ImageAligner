@@ -111,8 +111,10 @@ Box root {
   Expander {
     label: _("Keypoints");
 
-    child: Box {
-      
+    child: ScrolledWindow {
+      ColumnView keypoint_list {
+        vexpand: true;
+      }
     };
   }
 
@@ -129,6 +131,11 @@ Box root {
       Button {
         label: _("Find keypoints");
         action-name: "cv.keypoints";
+      }
+
+      Button {
+        label: _("Match features");
+        action-name: "cv.match-features";
       }
     }
   }

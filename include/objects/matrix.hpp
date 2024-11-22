@@ -45,11 +45,18 @@ public:
   void set(int col, int row, double val);
 
   template<typename T>
-  static void identity(T *data) {
+  static inline void identity(T *data) {
     memset(data, 0, sizeof(T) * 9);
     data[0] = 1;
     data[4] = 1;
     data[8] = 1;
+  }
+
+  template<typename T>
+  static inline void translation(T *data, T x, T y) {
+    identity(data);
+    data[2] = x;
+    data[5] = y;
   }
 
   // Changing ordering to COLUMN_MAJOR effectively transposes the matrix
