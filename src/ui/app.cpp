@@ -4,16 +4,22 @@
 
 #include <spdlog/spdlog.h>
 
-#include "cv/context.hpp"
-
 using namespace UI;
 
 App::App()
   : Application("org.patryk3211.imagealign")
   , m_fileDialog(Gtk::FileDialog::create()) {
   UI::initCustomWidgets();
+  m_recentManager = Gtk::RecentManager::get_default();
   m_window = new Window();
   m_window->set_title("Image Aligner");
+
+  auto filters = Gio::ListStore<Gtk::FileFilter>::create();
+  auto seqFilter = Gtk::FileFilter::create();
+  seqFilter->set_name("Sequence File");
+  seqFilter->add_pattern("*.seq");
+  filters->append(seqFilter);
+  m_fileDialog->set_filters(filters);
 
   signal_startup().connect(sigc::mem_fun(*this, &App::startup));
 
@@ -49,12 +55,10 @@ void App::openFileFinish(Glib::RefPtr<Gio::AsyncResult>& result) {
 
     m_state = UI::State::fromSequenceFile(file->get_path());
     if(m_state) {
+      m_recentManager->add_item(file->get_uri());
+      spdlog::info("{}", file->get_uri());
       m_window->setState(m_state);
       m_saveAction->set_enabled(true);
-
-      // auto ctx = new OpenCV::Context(m_state->m_imageFile);
-      // ctx->addReference(m_state->m_sequence->image(0));
-      // ctx->matchFeatures(m_state->m_sequence->image(1));
     } else {
       m_window->setState(nullptr);
       m_saveAction->set_enabled(false);

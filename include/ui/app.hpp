@@ -10,6 +10,7 @@ class App : public Gtk::Application {
   std::shared_ptr<UI::State> m_state;
 
   Glib::RefPtr<Gtk::FileDialog> m_fileDialog;
+  Glib::RefPtr<Gtk::RecentManager> m_recentManager;
 
   Glib::RefPtr<Gio::SimpleAction> m_saveAction;
 

@@ -60,23 +60,23 @@ void MainView::resetViewport() {
   if(m_mode == RenderMode::MATCHES) {
     m_scale = get_width();
     m_offset[0] = 0;
-    m_offset[1] = 0;
+    m_offset[1] = -0.5 / m_refAspect / m_scale;
   } else {
     m_scale = get_width() * 2.0;
     m_offset[0] = -1.0 / m_scale;
-    m_offset[1] = -0.5 / m_scale;
+    m_offset[1] = -0.5 / m_refAspect / m_scale;
   }
 }
 
 void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   m_state = state;
   m_images.clear();
-  resetViewport();
 
   // Calculate pixel size from reference image
   auto refSeqImg = m_state->m_sequence->image(m_state->m_sequence->getReferenceImageIndex());
   auto refParams = m_state->m_imageFile.getImageParameters(refSeqImg->getFileIndex());
   m_pixelSize = 1.0 / refParams.width();
+  m_refAspect = (double) refParams.width() / refParams.height();
 
   // Construct image views for all images in the sequence
   for(int i = 0; i < m_state->m_sequence->getImageCount(); ++i) {
@@ -86,6 +86,7 @@ void MainView::connectState(const std::shared_ptr<UI::State>& state) {
   }
 
   sequenceViewSelectionChanged(0, 0);
+  resetViewport();
 }
 
 std::shared_ptr<ViewImage> MainView::getView(int seqIndex) {
@@ -193,6 +194,9 @@ void MainView::setRenderMode(RenderMode mode) {
   if(m_mode != mode) {
     m_mode = mode;
     resetViewport();
+    // Make sure to invalidate special meshes.
+    m_keypointCount = 0;
+    m_matchCount = 0;
     queue_draw();
   }
 }
@@ -239,8 +243,6 @@ void MainView::renderModeDefault() {
 
   // Put selections on top of images
   renderAllSelections();
-
-  setRenderMode(RenderMode::MATCHES);
 }
 
 void MainView::renderAllSelections() {

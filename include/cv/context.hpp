@@ -39,8 +39,11 @@ public:
 
   void addReference(const ImgPtr& image);
 
+  void setMatchThreshold(float value);
+
   // Result retrieval
   const std::vector<cv::KeyPoint> *getKeypoints(const ImgPtr& image);
+  const std::vector<cv::DMatch> *getMatches(const ImgPtr& image);
 
   // Processing calls
   void findKeypoints(const ImgPtr& image, bool reprocess = false);

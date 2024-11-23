@@ -84,6 +84,7 @@ class MainView : public GLAreaPlus {
   float m_scale;
   float m_savedOffset[2];
   double m_pixelSize;
+  double m_refAspect;
 
   float m_currentSelection[4];
   bool m_makeSelection;

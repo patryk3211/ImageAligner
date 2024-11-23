@@ -35,9 +35,18 @@ void Context::addReference(const ImgPtr& image) {
   m_referenceImages.push_back(data);
 }
 
+void Context::setMatchThreshold(float value) {
+  m_matchThreshold = value;
+}
+
 const std::vector<cv::KeyPoint> *Context::getKeypoints(const ImgPtr& image) {
   auto data = getData(image);
   return data ? &data->m_keypoints : nullptr;
+}
+
+const std::vector<cv::DMatch> *Context::getMatches(const ImgPtr& image) {
+  auto data = getData(image);
+  return data ? &data->m_matches : nullptr;
 }
 
 void Context::findKeypoints(const ImgPtr& image, bool reprocess) {
@@ -83,6 +92,10 @@ void Context::alignFeatures(const ImgPtr& image) {
 
   // Estimate matrix
   cv::Mat affine = cv::estimateAffine2D(alignPoints, refPoints, cv::noArray(), cv::RANSAC, 4.0);
+  if(affine.empty()) {
+    spdlog::error("Failed to find a homography matrix for image {}!", align->m_image->getSequenceIndex());
+    return;
+  }
   // cv::Mat homography = cv::findHomography(alignPoints, refPoints, cv::RHO, 2.0, mask);
 
   cv::Mat homography;
@@ -135,6 +148,10 @@ void Context::matchAndAlignFeatures(const ImgPtr& image) {
                 refPoints.size(), ref->m_image->getSequenceIndex(), align->m_image->getSequenceIndex());
 
   cv::Mat affine = cv::estimateAffine2D(alignPoints, refPoints, cv::noArray(), cv::RANSAC, 4.0);
+  if(affine.empty()) {
+    spdlog::error("Failed to find a homography matrix for image {}!", align->m_image->getSequenceIndex());
+    return;
+  }
   // cv::Mat homography = cv::findHomography(alignPoints, refPoints, cv::RHO, 2.0, mask);
 
   cv::Mat homography;
